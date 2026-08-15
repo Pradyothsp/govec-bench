@@ -15,6 +15,16 @@ tasks:
       - uv run ty check
       - uv run ruff format --check --diff .
 
+  test:
+    desc: Run tests
+    cmd: uv run pytest
+
+  data:download:
+    desc: Download SIFT10K and SIFT100K datasets
+    aliases:
+      - data-download
+    cmd: uv run python scripts/download_datasets.py
+
   bench:all:
     desc: Run all benchmarks
     aliases:

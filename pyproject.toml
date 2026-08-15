@@ -17,6 +17,9 @@ dev = [
     "ruff>=0.15.14",
     "ty>=0.0.56",
 ]
+test = [
+    "pytest>=9.1.1",
+]
 
 [tool.setuptools.packages.find]
 include = ["govec_bench*"]
