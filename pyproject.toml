@@ -7,7 +7,9 @@ authors = [
     { name = "Pradyoth", email = "sppradyoth@outlook.com" }
 ]
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "govec",
+]
 
 [dependency-groups]
 dev = [
@@ -81,3 +83,6 @@ addopts = "--tb=short"
 markers = [
     "integration: requires external services",
 ]
+
+[tool.uv.sources]
+govec = { git = "ssh://git@github.com/Pradyothsp/govec-python.git" }
