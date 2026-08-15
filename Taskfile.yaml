@@ -25,6 +25,24 @@ tasks:
       - data-download
     cmd: uv run python scripts/download_datasets.py
 
+  docker:up:
+    desc: Start the comparison vector DBs (Chroma, ...) via Docker Compose
+    aliases:
+      - docker-up
+    cmd: docker compose up -d
+
+  docker:down:
+    desc: Stop the comparison vector DBs
+    aliases:
+      - docker-down
+    cmd: docker compose down
+
+  docker:logs:
+    desc: Tail logs from the comparison vector DBs
+    aliases:
+      - docker-logs
+    cmd: docker compose logs -f
+
   bench:all:
     desc: Run all benchmarks
     aliases:

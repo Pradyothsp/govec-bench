@@ -2,7 +2,7 @@ import time
 from dataclasses import asdict
 
 from govec_bench.adapters.base import InsertItem, VectorDBAdapter
-from govec_bench.adapters.govec_adapter import GovecAdapter
+from govec_bench.adapters.registry import build_adapters
 from govec_bench.datasets.synthetic import load_sift10k
 from govec_bench.results import LatencyStats, compute_latency_stats, write_results
 
@@ -37,24 +37,22 @@ def measure_batch_insert(adapter: VectorDBAdapter, items: list[InsertItem], batc
 
 def main() -> None:
     dataset = load_sift10k()
-    adapter = GovecAdapter()
+    adapters = build_adapters()
 
-    adapter.reset()
-    single_stats = measure_single_insert(adapter, dataset.base)
+    results: dict[str, object] = {}
+    for name, adapter in adapters.items():
+        adapter.reset()
+        single_stats = measure_single_insert(adapter, dataset.base)
 
-    adapter.reset()
-    batch_stats = measure_batch_insert(adapter, dataset.base, BATCH_SIZE)
+        adapter.reset()
+        batch_stats = measure_batch_insert(adapter, dataset.base, BATCH_SIZE)
 
-    path = write_results(
-        benchmark="insert_latency",
-        dataset="sift10k",
-        results={
-            "govec": {
-                "single": asdict(single_stats),
-                "batch": asdict(batch_stats),
-            },
-        },
-    )
+        results[name] = {
+            "single": asdict(single_stats),
+            "batch": asdict(batch_stats),
+        }
+
+    path = write_results(benchmark="insert_latency", dataset="sift10k", results=results)
     print(f"Wrote {path}")
 
 

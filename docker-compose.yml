@@ -1,0 +1,13 @@
+services:
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: govec-bench-chroma
+    command: ["run", "/config.yaml"]
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/data
+      - ./chroma-config.yaml:/config.yaml:ro
+
+volumes:
+  chroma_data:

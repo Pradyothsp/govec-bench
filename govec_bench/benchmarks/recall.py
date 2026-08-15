@@ -1,7 +1,8 @@
 from dataclasses import asdict
 
 from govec_bench.adapters.base import VectorDBAdapter
-from govec_bench.adapters.govec_adapter import GovecAdapter
+from govec_bench.adapters.registry import build_adapters
+from govec_bench.benchmarks.common import load_dataset
 from govec_bench.datasets.synthetic import load_sift10k
 from govec_bench.results import RecallStats, compute_recall_stats, write_results
 from govec_bench.types import NeighborIndices, Vector
@@ -13,9 +14,9 @@ K_VALUES = [1, 5, 10, 50]
 # groundtruth file's neighbor indices refer to.
 ID_PREFIX = "sift10k_"
 
-# siftsmall_groundtruth.ivecs was computed with Euclidean distance, but govec
-# currently only supports cosine -- so even under brute-force (exact) search,
-# expect recall just under 100% rather than a perfect match. See
+# siftsmall_groundtruth.ivecs was computed with Euclidean distance. Under
+# cosine distance (govec's/Chroma's default here), even brute-force (exact)
+# search recalls just under 100% due to the metric mismatch -- not a bug. See
 # docs/architecture/DISTANCE_METRICS.md in the govec repo.
 
 
@@ -42,16 +43,18 @@ def main() -> None:
         msg = "sift10k dataset must include groundtruth for the recall benchmark"
         raise ValueError(msg)
 
-    adapter = GovecAdapter()
+    adapters = build_adapters()
 
-    adapter.reset()
-    adapter.batch_insert(dataset.base)
+    results: dict[str, object] = {}
+    for name, adapter in adapters.items():
+        adapter.reset()
+        load_dataset(adapter, dataset.base)
 
-    results_by_k = {
-        f"k_{k}": asdict(measure_recall(adapter, dataset.queries, dataset.groundtruth, k)) for k in K_VALUES
-    }
+        results[name] = {
+            f"k_{k}": asdict(measure_recall(adapter, dataset.queries, dataset.groundtruth, k)) for k in K_VALUES
+        }
 
-    path = write_results(benchmark="recall", dataset="sift10k", results={"govec": results_by_k})
+    path = write_results(benchmark="recall", dataset="sift10k", results=results)
     print(f"Wrote {path}")
 
 

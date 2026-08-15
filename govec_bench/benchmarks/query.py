@@ -2,7 +2,8 @@ import time
 from dataclasses import asdict
 
 from govec_bench.adapters.base import VectorDBAdapter
-from govec_bench.adapters.govec_adapter import GovecAdapter
+from govec_bench.adapters.registry import build_adapters
+from govec_bench.benchmarks.common import load_dataset
 from govec_bench.datasets.synthetic import load_sift10k
 from govec_bench.results import LatencyStats, compute_latency_stats, write_results
 from govec_bench.types import Vector
@@ -22,14 +23,16 @@ def measure_query_latency(adapter: VectorDBAdapter, queries: list[Vector], k: in
 
 def main() -> None:
     dataset = load_sift10k()
-    adapter = GovecAdapter()
+    adapters = build_adapters()
 
-    adapter.reset()
-    adapter.batch_insert(dataset.base)
+    results: dict[str, object] = {}
+    for name, adapter in adapters.items():
+        adapter.reset()
+        load_dataset(adapter, dataset.base)
 
-    results_by_k = {f"k_{k}": asdict(measure_query_latency(adapter, dataset.queries, k)) for k in K_VALUES}
+        results[name] = {f"k_{k}": asdict(measure_query_latency(adapter, dataset.queries, k)) for k in K_VALUES}
 
-    path = write_results(benchmark="query_latency", dataset="sift10k", results={"govec": results_by_k})
+    path = write_results(benchmark="query_latency", dataset="sift10k", results=results)
     print(f"Wrote {path}")
 
 
