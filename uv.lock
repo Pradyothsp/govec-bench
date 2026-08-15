@@ -26,7 +26,7 @@ wheels = [
 [[package]]
 name = "govec"
 version = "0.1.0"
-source = { git = "ssh://git@github.com/Pradyothsp/govec-python.git#fdeff451a48b7fb437eaa082b3519fe052245037" }
+source = { git = "ssh://git@github.com/Pradyothsp/govec-python.git#b362502a1f9b81ae3936990e3747569892bc5059" }
 dependencies = [
     { name = "httpx" },
 ]

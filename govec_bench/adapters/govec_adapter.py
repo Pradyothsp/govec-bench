@@ -47,8 +47,4 @@ class GovecAdapter(VectorDBAdapter):
 
     @override
     def reset(self) -> None:
-        msg = (
-            "govec has no bulk-clear API (no list-all-ids or delete-all endpoint) -- "
-            "restart the govec server with a clean data/WAL/mmap dir between benchmark runs instead."
-        )
-        raise NotImplementedError(msg)
+        self._client.reset()
