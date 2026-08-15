@@ -1,11 +1,13 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
+from govec_bench.types import Vector
+
 
 @dataclass(frozen=True, slots=True)
 class InsertItem:
     id: str
-    vector: list[float]
+    vector: Vector
     metadata: dict[str, str] | None = None
 
 
@@ -25,13 +27,13 @@ class Stats:
 
 class VectorDBAdapter(ABC):
     @abstractmethod
-    def insert(self, vector_id: str, vector: list[float], metadata: dict[str, str] | None = None) -> None: ...
+    def insert(self, vector_id: str, vector: Vector, metadata: dict[str, str] | None = None) -> None: ...
 
     @abstractmethod
     def batch_insert(self, items: list[InsertItem]) -> None: ...
 
     @abstractmethod
-    def query(self, vector: list[float], k: int = 10) -> list[QueryResult]: ...
+    def query(self, vector: Vector, k: int = 10) -> list[QueryResult]: ...
 
     @abstractmethod
     def stats(self) -> Stats: ...
