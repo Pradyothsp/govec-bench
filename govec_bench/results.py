@@ -22,6 +22,21 @@ def compute_latency_stats(latencies_ms: list[float]) -> LatencyStats:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class RecallStats:
+    mean: float
+    min: float
+    max: float
+
+
+def compute_recall_stats(recalls: list[float]) -> RecallStats:
+    return RecallStats(
+        mean=statistics.mean(recalls),
+        min=min(recalls),
+        max=max(recalls),
+    )
+
+
 def write_results(benchmark: str, dataset: str, results: dict[str, object]) -> Path:
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
