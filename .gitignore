@@ -14,3 +14,6 @@ wheels/
 
 # downloaded datasets (regenerated via scripts/download_datasets.py)
 data/
+
+# benchmark output (regenerated via task bench:*)
+results/

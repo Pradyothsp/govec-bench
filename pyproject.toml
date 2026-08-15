@@ -67,6 +67,7 @@ convention = "google"
 ]
 
 "scripts/*" = ["T201"]
+"govec_bench/benchmarks/*" = ["T201"]
 
 [tool.ruff.format]
 quote-style = "double"
