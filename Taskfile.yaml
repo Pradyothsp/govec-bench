@@ -1,0 +1,68 @@
+version: "3"
+
+tasks:
+  fmt:
+    desc: Format code with ruff
+    cmds:
+      - uv run ruff check --fix .
+      - uv run ruff format .
+
+  fmt:check:
+    desc: Check formatting and types (ruff + ty)
+    aliases: [ check, fmt-check ]
+    cmds:
+      - uv run ruff check .
+      - uv run ty check
+      - uv run ruff format --check --diff .
+
+  bench:all:
+    desc: Run all benchmarks
+    aliases:
+      - bench
+    cmds:
+      - task: bench:insert
+      - task: bench:query
+      - task: bench:recall
+      - task: bench:memory
+      - task: bench:coldstart
+      - task: bench:rag
+
+  bench:insert:
+    desc: Insert latency benchmark
+    aliases:
+      - bench-insert
+    cmd: uv run python -m govec_bench.benchmarks.insert
+
+  bench:query:
+    desc: Query latency benchmark
+    aliases:
+      - bench-query
+    cmd: uv run python -m govec_bench.benchmarks.query
+
+  bench:recall:
+    desc: Recall@k benchmark
+    aliases:
+      - bench-recall
+    cmd: uv run python -m govec_bench.benchmarks.recall
+
+  bench:memory:
+    desc: Memory usage benchmark
+    aliases:
+      - bench-memory
+    cmd: uv run python -m govec_bench.benchmarks.memory
+
+  bench:coldstart:
+    desc: Cold start benchmark
+    aliases:
+      - bench-coldstart
+    cmd: uv run python -m govec_bench.benchmarks.cold_start
+
+  bench:rag:
+    desc: Real-document RAG comparison
+    aliases:
+      - bench-rag
+    cmd: uv run python -m govec_bench.benchmarks.rag
+
+  dashboard:
+    desc: Launch Streamlit dashboard
+    cmd: uv run streamlit run govec_bench/dashboard/app.py

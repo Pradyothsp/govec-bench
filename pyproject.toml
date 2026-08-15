@@ -1,0 +1,83 @@
+[project]
+name = "govec-bench"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Pradyoth", email = "sppradyoth@outlook.com" }
+]
+requires-python = ">=3.14"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "prek>=0.4.8",
+    "ruff>=0.15.14",
+    "ty>=0.0.56",
+]
+
+[tool.setuptools.packages.find]
+include = ["govec_bench*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "CPY",     # flake8-copyright (not needed)
+    "D",       # pydocstyle (user requested to ignore all docs/docstrings)
+    "COM812", # missing-trailing-comma (formatter conflict)
+    "ISC001", # implicit-str-concat (formatter conflict)
+    "INP001", # implicit-namespace-package (too noisy)
+    "TC",     # flake8-type-checking
+    "TD",     # flake8-todo
+    "FIX",    # flake8-fixme
+    "ERA001",
+    "PLR0913", # too many arguments
+    "E501", # too long line - it is annoying
+]
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "S101",
+    "PLR2004",
+    "PLR0913",
+    "ANN",
+    "D",
+    "PT019",
+    "ERA001",
+    "S105",
+    "S106",
+    "S107"
+]
+
+"scripts/*" = ["T201"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = false
+
+[tool.ty.environment]
+python-version = "3.14"
+
+[tool.ty.rules]
+all = "error"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "--tb=short"
+markers = [
+    "integration: requires external services",
+]

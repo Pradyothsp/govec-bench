@@ -1,0 +1,16 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# IDEs
+.idea/
+
+# downloaded datasets (regenerated via scripts/download_datasets.py)
+data/
