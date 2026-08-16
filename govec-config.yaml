@@ -22,8 +22,9 @@ engine:
   dimensions: 128 # SIFT10K/100K are 128-dim
   enable_hybrid_search: true
   enable_metadata_index: false
-  hnsw_m: 96 # tuned up from the default (16) to reach ~recall parity with Chroma -- see STATUS.md #9/#10
-  hnsw_ef_search: 300 # tuned up from the default (20) -- see STATUS.md #9/#10
+  hnsw_m: 48 # tuned -- see STATUS.md #9/#10: reaches 95.2% recall@10 with default-cheap ef_search
+  hnsw_ef_search: 20 # default -- cheap queries; recall now comes from ef_construction, not this
+  hnsw_ef_construction: 300 # decoupled construction-time knob (govec fix, see docs/architecture/HNSW_EF_CONSTRUCTION.md in govec)
 
 grpc:
   enabled: false # not used by the benchmark adapters; disabled to keep the container's footprint minimal
