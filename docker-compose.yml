@@ -1,4 +1,24 @@
 services:
+  govec:
+    build:
+      context: git@github.com:Pradyothsp/govec.git#main
+      dockerfile: Dockerfile
+    container_name: govec-bench-govec
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./govec-config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+
   chroma:
     image: chromadb/chroma:latest
     container_name: govec-bench-chroma
@@ -8,6 +28,11 @@ services:
     volumes:
       - chroma_data:/data
       - ./chroma-config.yaml:/config.yaml:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
 
 volumes:
   chroma_data:

@@ -1,0 +1,31 @@
+# govec config for govec-bench (mounted over the image's baked-in config.yaml).
+# Mirrors the "Recommended govec config.yaml for Fair Benchmarking" in STATUS.md.
+
+server:
+  host: ""
+  port: 8000
+  shutdown_timeout: 10s
+  log_level: "info"
+
+storage:
+  data_path: "./govec_data.bin"
+  wal_path: "./govec.wal"
+  auto_save_enabled: false # periodic saves hold the write lock for the whole snapshot -- pure noise for latency benchmarking
+  auto_save_interval: 60s
+  enable_mmap: false # keep both sides in-memory; mmap isn't a fair comparison unless Chroma is disk-backed the same way
+  mmap_store_path: "./govec_mmap/"
+
+engine:
+  index_type: "brute" # or "hnsw" -- run both for the speed/recall tradeoff comparison
+  quantization: "none"
+  distance_metric: "cosine" # matches ChromaAdapter's collection (hnsw:space: "cosine")
+  dimensions: 128 # SIFT10K/100K are 128-dim
+  enable_hybrid_search: true
+  enable_metadata_index: false
+  hnsw_m: 16
+  hnsw_ef_search: 20
+
+grpc:
+  enabled: false # not used by the benchmark adapters; disabled to keep the container's footprint minimal
+  port: 50051
+  max_recv_msg_size_mb: 64
