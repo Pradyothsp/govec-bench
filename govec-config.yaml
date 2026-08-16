@@ -16,14 +16,14 @@ storage:
   mmap_store_path: "./govec_mmap/"
 
 engine:
-  index_type: "brute" # or "hnsw" -- run both for the speed/recall tradeoff comparison
+  index_type: "hnsw" # ANN, to compare against Chroma's own HNSW index on equal footing
   quantization: "none"
   distance_metric: "cosine" # matches ChromaAdapter's collection (hnsw:space: "cosine")
   dimensions: 128 # SIFT10K/100K are 128-dim
   enable_hybrid_search: true
   enable_metadata_index: false
-  hnsw_m: 16
-  hnsw_ef_search: 20
+  hnsw_m: 96 # tuned up from the default (16) to reach ~recall parity with Chroma -- see STATUS.md #9/#10
+  hnsw_ef_search: 300 # tuned up from the default (20) -- see STATUS.md #9/#10
 
 grpc:
   enabled: false # not used by the benchmark adapters; disabled to keep the container's footprint minimal
