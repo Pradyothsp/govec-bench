@@ -1,0 +1,166 @@
+import time
+from dataclasses import asdict, dataclass
+from typing import NamedTuple
+
+from govec_bench.adapters.chroma_adapter import ChromaAdapter
+from govec_bench.adapters.govec_adapter import GovecAdapter
+from govec_bench.benchmarks.common import compose, docker, load_dataset, wait_until_queryable
+from govec_bench.datasets.synthetic import load_sift100k
+from govec_bench.results import write_results
+
+# Generous: this waits out a full container recreation (docker compose down
+# -v && up -d), not just a process restart like cold_start.py's POLL_TIMEOUT_S.
+POLL_TIMEOUT_S = 120
+
+# RAM checkpoints, seconds after both loads finish. Not a single "settled"
+# snapshot: govec's RSS drops sharply over the first few minutes post-load as
+# Go's scavenger returns freed pages to the OS (see STATUS.md #14) -- a
+# one-shot measurement just encodes whatever moment you happened to sample,
+# so this reports the actual curve instead of picking one arbitrary point.
+# Confirmed (STATUS.md #15): govec's RSS is *still* descending at t=300, so
+# even the last sample here isn't "settled" -- treat delta_ram_bytes_last_sample
+# as one more point on the curve, not a steady-state number. The only
+# timing-independent figure is #14's pprof inuse_space (live heap).
+RAM_SAMPLE_DELAYS_S = (0, 60, 180, 300)
+
+GOVEC_CONTAINER = "govec-bench-govec"
+GOVEC_DISK_PATHS = ("/app/govec_data.bin", "/app/govec.wal")
+CHROMA_CONTAINER = "govec-bench-chroma"
+CHROMA_DISK_PATHS = ("/data",)
+
+_SIZE_UNITS = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3, "TiB": 1024**4}
+
+
+@dataclass(frozen=True, slots=True)
+class FootprintStats:
+    disk_bytes: int
+    ram_bytes: int
+
+
+class RamSample(NamedTuple):
+    t_s: int
+    ram_bytes: int
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryResult:
+    baseline: FootprintStats
+    delta_disk_bytes: int
+    ram_series: list[RamSample]
+    delta_ram_bytes_peak: int
+    delta_ram_bytes_last_sample: int
+
+
+def _du_bytes(container: str, paths: tuple[str, ...]) -> int:
+    # govec_data.bin/govec.wal don't exist until the first flush/write on a
+    # freshly created container -- `du` on a missing path errors, so probe
+    # existence first and treat "missing" as 0 bytes.
+    total = 0
+    for path in paths:
+        result = docker("exec", container, "sh", "-c", f"test -e '{path}' && du -sb '{path}' || echo 0")
+        total += int(result.stdout.split()[0])
+    return total
+
+
+def _parse_docker_mem_size(size: str) -> int:
+    # Longest suffix first: "MiB".endswith("B") is also true, so checking "B"
+    # before "MiB" would strip only the "B" and leave "16.46Mi" behind.
+    for unit in sorted(_SIZE_UNITS, key=len, reverse=True):
+        if size.endswith(unit):
+            return int(float(size.removesuffix(unit)) * _SIZE_UNITS[unit])
+    msg = f"unrecognized docker stats memory size: {size!r}"
+    raise ValueError(msg)
+
+
+def _ram_bytes(container: str) -> int:
+    # "docker stats" reads the container's cgroup memory directly -- no
+    # per-database code needed, works identically for govec and Chroma.
+    used = docker("stats", "--no-stream", "--format", "{{.MemUsage}}", container).stdout
+    return _parse_docker_mem_size(used.split("/")[0].strip())
+
+
+def _measure(container: str, disk_paths: tuple[str, ...]) -> FootprintStats:
+    return FootprintStats(disk_bytes=_du_bytes(container, disk_paths), ram_bytes=_ram_bytes(container))
+
+
+def _ram_series(containers: dict[str, str]) -> dict[str, list[RamSample]]:
+    # Sampled in the same pass for every DB at each checkpoint, so all DBs
+    # share one wall-clock timeline instead of paying the wait once per DB.
+    series: dict[str, list[RamSample]] = {name: [] for name in containers}
+    start = time.monotonic()
+    for delay in RAM_SAMPLE_DELAYS_S:
+        wait = delay - (time.monotonic() - start)
+        if wait > 0:
+            time.sleep(wait)
+        for name, container in containers.items():
+            series[name].append(RamSample(t_s=delay, ram_bytes=_ram_bytes(container)))
+    return series
+
+
+def _build_result(baseline: FootprintStats, disk_after: int, ram_series: list[RamSample]) -> MemoryResult:
+    return MemoryResult(
+        baseline=baseline,
+        delta_disk_bytes=disk_after - baseline.disk_bytes,
+        ram_series=ram_series,
+        delta_ram_bytes_peak=ram_series[0].ram_bytes - baseline.ram_bytes,
+        delta_ram_bytes_last_sample=ram_series[-1].ram_bytes - baseline.ram_bytes,
+    )
+
+
+def _result_to_json(result: MemoryResult) -> dict[str, object]:
+    return {
+        "baseline": asdict(result.baseline),
+        "delta_disk_bytes": result.delta_disk_bytes,
+        "ram_series": [sample._asdict() for sample in result.ram_series],
+        "delta_ram_bytes_peak": result.delta_ram_bytes_peak,
+        "delta_ram_bytes_last_sample": result.delta_ram_bytes_last_sample,
+    }
+
+
+def main() -> None:
+    # Fresh containers + a fresh named volume: repeated benchmark runs today
+    # left Chroma's /data at 382MB of orphaned collection directories from
+    # past reset() calls, which chromadb's own reset() doesn't clean up on
+    # disk. A stale volume would make the disk numbers meaningless.
+    print("Resetting containers to a clean state (docker compose down -v && up -d)...")
+    compose("down", "-v")
+    compose("up", "-d")
+
+    print("Waiting for containers to become queryable...")
+    wait_until_queryable(GovecAdapter, POLL_TIMEOUT_S)
+    wait_until_queryable(ChromaAdapter, POLL_TIMEOUT_S)
+    govec = GovecAdapter()
+    chroma = ChromaAdapter()
+
+    baseline_govec = _measure(GOVEC_CONTAINER, GOVEC_DISK_PATHS)
+    baseline_chroma = _measure(CHROMA_CONTAINER, CHROMA_DISK_PATHS)
+
+    dataset = load_sift100k()
+
+    print(f"Loading {len(dataset.base)} vectors into govec...")
+    load_dataset(govec, dataset.base)
+    govec.flush()  # compact the WAL into the on-disk snapshot before measuring
+
+    print(f"Loading {len(dataset.base)} vectors into chroma...")
+    load_dataset(chroma, dataset.base)
+
+    disk_govec = _du_bytes(GOVEC_CONTAINER, GOVEC_DISK_PATHS)
+    disk_chroma = _du_bytes(CHROMA_CONTAINER, CHROMA_DISK_PATHS)
+
+    print(f"Sampling RAM at t={RAM_SAMPLE_DELAYS_S}s after load...")
+    ram_series = _ram_series({"govec": GOVEC_CONTAINER, "chroma": CHROMA_CONTAINER})
+
+    govec_result = _build_result(baseline_govec, disk_govec, ram_series["govec"])
+    chroma_result = _build_result(baseline_chroma, disk_chroma, ram_series["chroma"])
+
+    results: dict[str, object] = {
+        "govec": _result_to_json(govec_result),
+        "chroma": _result_to_json(chroma_result),
+    }
+
+    path = write_results(benchmark="memory", dataset="sift100k", results=results)
+    print(f"Wrote {path}")
+
+
+if __name__ == "__main__":
+    main()

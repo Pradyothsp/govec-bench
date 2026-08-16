@@ -52,3 +52,9 @@ class GovecAdapter(VectorDBAdapter):
     @override
     def reset(self) -> None:
         self._client.reset()
+
+    def flush(self) -> None:
+        # govec-specific: compacts the WAL into an on-disk snapshot
+        # (POST /api/v1/admin/flush). Not part of VectorDBAdapter -- Chroma
+        # persists incrementally on its own and has no equivalent call.
+        self._client.flush()
