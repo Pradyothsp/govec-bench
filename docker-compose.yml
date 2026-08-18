@@ -18,7 +18,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "2"
+          cpus: "1"
           memory: 2G
 
   chroma:
@@ -33,7 +33,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "2"
+          cpus: "1"
           memory: 2G
 
   qdrant:
@@ -47,7 +47,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "2"
+          cpus: "1"
           memory: 2G
 
 volumes:
