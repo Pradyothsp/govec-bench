@@ -36,5 +36,20 @@ services:
           cpus: "2"
           memory: 2G
 
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: govec-bench-qdrant
+    ports:
+      - "6333:6333" # REST, what the adapter uses
+      - "6334:6334" # gRPC, unused by the adapter but exposed for parity/debugging
+    volumes:
+      - qdrant_data:/qdrant/storage
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+
 volumes:
   chroma_data:
+  qdrant_data:
