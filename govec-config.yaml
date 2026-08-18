@@ -22,9 +22,9 @@ engine:
   dimensions: 128 # SIFT10K/100K are 128-dim
   enable_hybrid_search: true
   enable_metadata_index: false
-  hnsw_m: 48 # tuned -- see STATUS.md #9/#10: reaches 95.2% recall@10 with default-cheap ef_search
-  hnsw_ef_search: 20 # default -- cheap queries; recall now comes from ef_construction, not this
-  hnsw_ef_construction: 300 # decoupled construction-time knob (govec fix, see docs/architecture/HNSW_EF_CONSTRUCTION.md in govec)
+  hnsw_m: 16 # CANDIDATE under test: EfConstruction/EfSearch sweep found M=16/efc=200/efs=50 matches or beats M=24/efc=300/efs=20's recall at ~65% the edges (RAM) and ~half the insert cost -- see govec HNSW_NEIGHBOR_SELECTION.md sweep table; validating live before making this the new baseline
+  hnsw_ef_search: 50 # raised from 20 -- buys back recall (98.0% recall@1 in pure-Go sweep); doesn't cost anything at k=50 since resultCap=max(k,efSearch) is already 50 there, only adds cost to low-k queries govec has slack on
+  hnsw_ef_construction: 200 # lowered from 300 -- M=16 needs a narrower candidate pool than M=24 did to reach the same recall
 
 grpc:
   enabled: false # not used by the benchmark adapters; disabled to keep the container's footprint minimal

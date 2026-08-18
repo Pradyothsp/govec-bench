@@ -15,13 +15,13 @@ POLL_TIMEOUT_S = 120
 # RAM checkpoints, seconds after both loads finish. Not a single "settled"
 # snapshot: govec's RSS drops sharply over the first few minutes post-load as
 # Go's scavenger returns freed pages to the OS (see STATUS.md #14) -- a
-# one-shot measurement just encodes whatever moment you happened to sample,
-# so this reports the actual curve instead of picking one arbitrary point.
-# Confirmed (STATUS.md #15): govec's RSS is *still* descending at t=300, so
-# even the last sample here isn't "settled" -- treat delta_ram_bytes_last_sample
-# as one more point on the curve, not a steady-state number. The only
+# one-shot measurement just encodes whatever moment you happened to sample.
+# Shortened to (0, 60) for routine runs -- STATUS.md #15 already established
+# the full descent curve out to t=300 (RSS is still descending even there, so
+# it was never a "settled" number either); this is a quick before/after
+# sanity check, not a re-run of that full characterization. The only
 # timing-independent figure is #14's pprof inuse_space (live heap).
-RAM_SAMPLE_DELAYS_S = (0, 60, 180, 300)
+RAM_SAMPLE_DELAYS_S = (0, 60)
 
 GOVEC_CONTAINER = "govec-bench-govec"
 GOVEC_DISK_PATHS = ("/app/govec_data.bin", "/app/govec.wal")
