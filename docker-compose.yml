@@ -1,11 +1,13 @@
 services:
   govec:
     build:
-      context: git@github.com:Pradyothsp/govec.git#main
+      context: ../govec
       dockerfile: Dockerfile
     container_name: govec-bench-govec
     ports:
       - "8000:8000"
+    # environment:
+    #   - GOMEMLIMIT=250MiB # cuts measured RAM ~46% at no latency cost (see govec's docs/architecture/MEMORY_TUNING.md) -- left commented out on purpose: 250MiB was tuned to this benchmark's 100k-vector dataset specifically and isn't a safe default for other workload sizes, so the baseline here stays govec's true out-of-the-box behavior (matching Chroma's own line below, which is also just its stock defaults). Uncomment to reproduce that experiment.
     volumes:
       - ./govec-config.yaml:/app/config.yaml:ro
     healthcheck:
