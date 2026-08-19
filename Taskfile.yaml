@@ -43,6 +43,12 @@ tasks:
       - docker-logs
     cmd: docker compose logs -f
 
+  docker:clean:
+    desc: Remove this project's containers, images, and volumes to reclaim disk space
+    aliases:
+      - docker-clean
+    cmd: ./scripts/docker_cleanup.sh
+
   bench:all:
     desc: Run all benchmarks
     aliases:
