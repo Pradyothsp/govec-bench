@@ -1,6 +1,7 @@
 from dataclasses import asdict
 
 from govec_bench.adapters.base import VectorDBAdapter
+from govec_bench.adapters.govec_adapter import GovecAdapter
 from govec_bench.adapters.registry import build_adapters
 from govec_bench.benchmarks.common import load_dataset
 from govec_bench.datasets.synthetic import load_sift10k
@@ -44,6 +45,12 @@ def main() -> None:
         raise ValueError(msg)
 
     adapters = build_adapters()
+    # Not in build_adapters() -- that dict is shared with insert.py/query.py,
+    # which have no use for a second govec variant. Scoped to this benchmark
+    # only, to measure the accuracy cost of int8 scalar quantization
+    # (govec-config-scalar.yaml, the govec-scalar service on port 8002)
+    # against the RAM/disk win already measured in memory.py.
+    adapters["govec-scalar"] = GovecAdapter(port=8002)
 
     results: dict[str, object] = {}
     for name, adapter in adapters.items():

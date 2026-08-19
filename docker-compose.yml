@@ -21,6 +21,26 @@ services:
           cpus: "1"
           memory: 2G
 
+  govec-scalar:
+    build:
+      context: ../govec
+      dockerfile: Dockerfile
+    container_name: govec-bench-govec-scalar
+    ports:
+      - "8002:8000"
+    volumes:
+      - ./govec-config-scalar.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 2G
+
   chroma:
     image: chromadb/chroma:latest
     container_name: govec-bench-chroma

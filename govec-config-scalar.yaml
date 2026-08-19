@@ -1,0 +1,33 @@
+# govec config for the scalar-quantization variant (govec-scalar service).
+# Identical to govec-config.yaml except engine.quantization -- isolates
+# quantization as the only variable when comparing against the float32 govec run.
+
+server:
+  host: ""
+  port: 8000
+  shutdown_timeout: 10s
+  log_level: "info"
+
+storage:
+  data_path: "./govec_data.bin"
+  wal_path: "./govec.wal"
+  auto_save_enabled: false # periodic saves hold the write lock for the whole snapshot -- pure noise for latency benchmarking
+  auto_save_interval: 60s
+  enable_mmap: false # keep both sides in-memory; mmap isn't a fair comparison unless Chroma is disk-backed the same way
+  mmap_store_path: "./govec_mmap/"
+
+engine:
+  index_type: "hnsw" # ANN, to compare against Chroma's own HNSW index on equal footing
+  quantization: "scalar" # int8 storage, ~4x memory reduction vs float32 -- see internal/core/quantize.go in govec
+  distance_metric: "cosine" # matches ChromaAdapter's collection (hnsw:space: "cosine")
+  dimensions: 128 # SIFT10K/100K are 128-dim
+  enable_hybrid_search: true
+  enable_metadata_index: false
+  hnsw_m: 16 # matches Chroma's own default; the M=48/M=24 re-tunings before this overcorrected -- see govec HNSW_NEIGHBOR_SELECTION.md sweep table
+  hnsw_ef_search: 50 # raised from 20 -- buys back recall without costing anything at k=50, since resultCap=max(k,efSearch) is already 50 there regardless
+  hnsw_ef_construction: 200 # govec's own factory default; M=16 needs a narrower candidate pool than M=24 did to reach the same recall
+
+grpc:
+  enabled: false # not used by the benchmark adapters; disabled to keep the container's footprint minimal
+  port: 50051
+  max_recv_msg_size_mb: 64

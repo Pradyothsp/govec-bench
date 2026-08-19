@@ -4,6 +4,7 @@ from dataclasses import asdict
 from govec_bench.adapters.base import VectorDBAdapter
 from govec_bench.adapters.chroma_adapter import ChromaAdapter
 from govec_bench.adapters.govec_adapter import GovecAdapter
+from govec_bench.adapters.qdrant_adapter import QdrantAdapter
 from govec_bench.benchmarks.common import compose, wait_until_queryable
 from govec_bench.results import LatencyStats, compute_latency_stats, write_results
 
@@ -14,6 +15,7 @@ POLL_TIMEOUT_S = 60
 SERVICES: dict[str, Callable[[], VectorDBAdapter]] = {
     "govec": GovecAdapter,
     "chroma": ChromaAdapter,
+    "qdrant": QdrantAdapter,
 }
 
 

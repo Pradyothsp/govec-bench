@@ -2,6 +2,7 @@ import time
 from dataclasses import asdict
 
 from govec_bench.adapters.base import InsertItem, VectorDBAdapter
+from govec_bench.adapters.govec_adapter import GovecAdapter
 from govec_bench.adapters.registry import build_adapters
 from govec_bench.datasets.synthetic import load_sift10k
 from govec_bench.results import LatencyStats, compute_latency_stats, write_results
@@ -38,6 +39,12 @@ def measure_batch_insert(adapter: VectorDBAdapter, items: list[InsertItem], batc
 def main() -> None:
     dataset = load_sift10k()
     adapters = build_adapters()
+    # Not in build_adapters() -- that dict is shared with query.py, which has
+    # no use for a second govec variant. Scoped to this benchmark only,
+    # following recall.py's existing pattern, to measure whether int8 scalar
+    # quantization (govec-config-scalar.yaml, the govec-scalar service on
+    # port 8002) costs anything on insert latency.
+    adapters["govec-scalar"] = GovecAdapter(port=8002)
 
     results: dict[str, object] = {}
     for name, adapter in adapters.items():

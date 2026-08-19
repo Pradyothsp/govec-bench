@@ -4,6 +4,7 @@ from collections.abc import Mapping, Sequence
 from typing import override
 
 from qdrant_client import QdrantClient
+from qdrant_client.http.exceptions import ResponseHandlingException
 from qdrant_client.models import Distance, HnswConfigDiff, OptimizersConfigDiff, PointStruct, VectorParams
 
 from govec_bench.adapters.base import InsertItem, QueryResult, Stats, VectorDBAdapter
@@ -110,7 +111,16 @@ class QdrantAdapter(VectorDBAdapter):
     def _wait_for_indexing(self) -> None:
         deadline = time.monotonic() + _INDEXING_POLL_TIMEOUT_S
         while time.monotonic() < deadline:
-            info = self._client.get_collection(COLLECTION_NAME)
+            try:
+                info = self._client.get_collection(COLLECTION_NAME)
+            except ResponseHandlingException:
+                # Transient: get_collection() can itself time out while
+                # Qdrant's segment optimizer is heavily loaded mid-merge on a
+                # large batch load (observed on a 100k load). Treat like "not
+                # ready yet" and keep polling rather than failing the whole
+                # load on one slow HTTP response.
+                time.sleep(_INDEXING_POLL_INTERVAL_S)
+                continue
             if info.indexed_vectors_count is not None and info.indexed_vectors_count >= (info.points_count or 0):
                 return
             time.sleep(_INDEXING_POLL_INTERVAL_S)

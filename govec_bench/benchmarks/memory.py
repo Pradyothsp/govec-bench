@@ -1,9 +1,13 @@
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
+from functools import partial
 from typing import NamedTuple
 
+from govec_bench.adapters.base import VectorDBAdapter
 from govec_bench.adapters.chroma_adapter import ChromaAdapter
 from govec_bench.adapters.govec_adapter import GovecAdapter
+from govec_bench.adapters.qdrant_adapter import QdrantAdapter
 from govec_bench.benchmarks.common import compose, docker, load_dataset, wait_until_queryable
 from govec_bench.datasets.synthetic import load_sift100k
 from govec_bench.results import write_results
@@ -25,8 +29,19 @@ RAM_SAMPLE_DELAYS_S = (0, 60)
 
 GOVEC_CONTAINER = "govec-bench-govec"
 GOVEC_DISK_PATHS = ("/app/govec_data.bin", "/app/govec.wal")
+GOVEC_SCALAR_CONTAINER = "govec-bench-govec-scalar"
 CHROMA_CONTAINER = "govec-bench-chroma"
 CHROMA_DISK_PATHS = ("/data",)
+QDRANT_CONTAINER = "govec-bench-qdrant"
+QDRANT_DISK_PATHS = ("/qdrant/storage",)
+
+# name -> (adapter constructor, container name, on-disk paths to measure)
+DBS: dict[str, tuple[Callable[[], VectorDBAdapter], str, tuple[str, ...]]] = {
+    "govec": (GovecAdapter, GOVEC_CONTAINER, GOVEC_DISK_PATHS),
+    "govec-scalar": (partial(GovecAdapter, port=8002), GOVEC_SCALAR_CONTAINER, GOVEC_DISK_PATHS),
+    "chroma": (ChromaAdapter, CHROMA_CONTAINER, CHROMA_DISK_PATHS),
+    "qdrant": (QdrantAdapter, QDRANT_CONTAINER, QDRANT_DISK_PATHS),
+}
 
 _SIZE_UNITS = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3, "TiB": 1024**4}
 
@@ -62,6 +77,27 @@ def _du_bytes(container: str, paths: tuple[str, ...]) -> int:
     return total
 
 
+DISK_STABILIZE_POLL_S = 3.0
+DISK_STABILIZE_TIMEOUT_S = 120.0
+
+
+def _stable_du_bytes(container: str, paths: tuple[str, ...]) -> int:
+    # Qdrant keeps merging/vacuuming on-disk segments well after indexing
+    # itself catches up -- a du taken right after load can land mid-merge,
+    # holding old+new segment copies at once (observed: 2.85GB immediately
+    # after a 100k load, settling to 231MB five seconds later). Poll until two
+    # consecutive reads agree instead of trusting a single snapshot.
+    deadline = time.monotonic() + DISK_STABILIZE_TIMEOUT_S
+    previous = _du_bytes(container, paths)
+    while time.monotonic() < deadline:
+        time.sleep(DISK_STABILIZE_POLL_S)
+        current = _du_bytes(container, paths)
+        if current == previous:
+            return current
+        previous = current
+    return previous
+
+
 def _parse_docker_mem_size(size: str) -> int:
     # Longest suffix first: "MiB".endswith("B") is also true, so checking "B"
     # before "MiB" would strip only the "B" and leave "16.46Mi" behind.
@@ -80,7 +116,7 @@ def _ram_bytes(container: str) -> int:
 
 
 def _measure(container: str, disk_paths: tuple[str, ...]) -> FootprintStats:
-    return FootprintStats(disk_bytes=_du_bytes(container, disk_paths), ram_bytes=_ram_bytes(container))
+    return FootprintStats(disk_bytes=_stable_du_bytes(container, disk_paths), ram_bytes=_ram_bytes(container))
 
 
 def _ram_series(containers: dict[str, str]) -> dict[str, list[RamSample]]:
@@ -127,35 +163,29 @@ def main() -> None:
     compose("up", "-d")
 
     print("Waiting for containers to become queryable...")
-    wait_until_queryable(GovecAdapter, POLL_TIMEOUT_S)
-    wait_until_queryable(ChromaAdapter, POLL_TIMEOUT_S)
-    govec = GovecAdapter()
-    chroma = ChromaAdapter()
+    adapters: dict[str, VectorDBAdapter] = {}
+    for name, (adapter_cls, _container, _paths) in DBS.items():
+        wait_until_queryable(adapter_cls, POLL_TIMEOUT_S)
+        adapters[name] = adapter_cls()
 
-    baseline_govec = _measure(GOVEC_CONTAINER, GOVEC_DISK_PATHS)
-    baseline_chroma = _measure(CHROMA_CONTAINER, CHROMA_DISK_PATHS)
+    baselines = {name: _measure(container, paths) for name, (_cls, container, paths) in DBS.items()}
 
     dataset = load_sift100k()
 
-    print(f"Loading {len(dataset.base)} vectors into govec...")
-    load_dataset(govec, dataset.base)
-    govec.flush()  # compact the WAL into the on-disk snapshot before measuring
+    for name, adapter in adapters.items():
+        print(f"Loading {len(dataset.base)} vectors into {name}...")
+        load_dataset(adapter, dataset.base)
+        if isinstance(adapter, GovecAdapter):
+            adapter.flush()  # compact the WAL into the on-disk snapshot before measuring
 
-    print(f"Loading {len(dataset.base)} vectors into chroma...")
-    load_dataset(chroma, dataset.base)
-
-    disk_govec = _du_bytes(GOVEC_CONTAINER, GOVEC_DISK_PATHS)
-    disk_chroma = _du_bytes(CHROMA_CONTAINER, CHROMA_DISK_PATHS)
+    print("Waiting for on-disk footprint to stabilize (background segment merges/vacuums)...")
+    disk_after = {name: _stable_du_bytes(container, paths) for name, (_cls, container, paths) in DBS.items()}
 
     print(f"Sampling RAM at t={RAM_SAMPLE_DELAYS_S}s after load...")
-    ram_series = _ram_series({"govec": GOVEC_CONTAINER, "chroma": CHROMA_CONTAINER})
-
-    govec_result = _build_result(baseline_govec, disk_govec, ram_series["govec"])
-    chroma_result = _build_result(baseline_chroma, disk_chroma, ram_series["chroma"])
+    ram_series = _ram_series({name: container for name, (_cls, container, _paths) in DBS.items()})
 
     results: dict[str, object] = {
-        "govec": _result_to_json(govec_result),
-        "chroma": _result_to_json(chroma_result),
+        name: _result_to_json(_build_result(baselines[name], disk_after[name], ram_series[name])) for name in DBS
     }
 
     path = write_results(benchmark="memory", dataset="sift100k", results=results)
