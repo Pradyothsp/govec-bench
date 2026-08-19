@@ -23,7 +23,11 @@ COLLECTION_NAME = "govec_bench"
 # latency reflects "durable and indexed," not just "durable" -- a fairer
 # number for cross-adapter comparison, even if less flattering on its own.
 _INDEXING_POLL_INTERVAL_S = 0.05
-_INDEXING_POLL_TIMEOUT_S = 30.0
+# 30s was fine at SIFT10K scale (STATUS.md §22) but too tight at SIFT100K --
+# indexing catch-up cost grows with collection size, and memory.py's own
+# DISK_STABILIZE_TIMEOUT_S (120s) already documents the same class of Qdrant
+# background-merge lag at this scale.
+_INDEXING_POLL_TIMEOUT_S = 120.0
 
 # Qdrant point IDs must be a u64 or a UUID -- arbitrary strings like our
 # "sift10k_12345" IDs are rejected outright. Map deterministically into this

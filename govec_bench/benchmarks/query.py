@@ -2,6 +2,7 @@ import time
 from dataclasses import asdict
 
 from govec_bench.adapters.base import VectorDBAdapter
+from govec_bench.adapters.govec_adapter import GovecAdapter
 from govec_bench.adapters.registry import build_adapters
 from govec_bench.benchmarks.common import load_dataset
 from govec_bench.datasets.synthetic import load_sift10k
@@ -24,6 +25,10 @@ def measure_query_latency(adapter: VectorDBAdapter, queries: list[Vector], k: in
 def main() -> None:
     dataset = load_sift10k()
     adapters = build_adapters()
+    # Not in build_adapters() -- see insert.py/recall.py's identical comment:
+    # a second govec variant to measure int8 scalar quantization's query cost
+    # (govec-config-scalar.yaml, the govec-scalar service on port 8002).
+    adapters["govec-scalar"] = GovecAdapter(port=8002)
 
     results: dict[str, object] = {}
     for name, adapter in adapters.items():

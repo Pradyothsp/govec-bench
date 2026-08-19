@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from dataclasses import asdict
+from functools import partial
 
 from govec_bench.adapters.base import VectorDBAdapter
 from govec_bench.adapters.chroma_adapter import ChromaAdapter
@@ -14,6 +15,7 @@ POLL_TIMEOUT_S = 60
 # service name (docker-compose.yml) -> adapter constructor
 SERVICES: dict[str, Callable[[], VectorDBAdapter]] = {
     "govec": GovecAdapter,
+    "govec-scalar": partial(GovecAdapter, port=8002),
     "chroma": ChromaAdapter,
     "qdrant": QdrantAdapter,
 }

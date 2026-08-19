@@ -18,7 +18,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "1"
+          cpus: "2"
           memory: 2G
 
   govec-scalar:
@@ -38,7 +38,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "1"
+          cpus: "2"
           memory: 2G
 
   chroma:
@@ -53,7 +53,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "1"
+          cpus: "2"
           memory: 2G
 
   qdrant:
@@ -67,7 +67,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "1"
+          cpus: "2"
           memory: 2G
 
 volumes:
