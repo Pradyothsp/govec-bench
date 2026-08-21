@@ -1,0 +1,83 @@
+from govec_bench.adapters.registry import build_adapters
+from govec_bench.benchmarks.common import load_dataset
+from govec_bench.chunkers.markdown_heading_chunker import MarkdownHeadingChunker
+from govec_bench.chunkers.size_bound_chunker import SizeBoundChunker
+from govec_bench.datasets.documents import load_chunks, to_insert_items
+from govec_bench.embeddings.base import Embedder
+from govec_bench.embeddings.sentence_transformers_embedder import SentenceTransformersEmbedder  # noqa: F401
+from govec_bench.eval.questions import QUESTIONS
+from govec_bench.eval.store import (
+    DB_PATH,
+    EvalResult,
+    ensure_schema,
+    get_db,
+    insert_questions,
+    insert_results,
+    insert_run,
+    recall_at_k,
+)
+from govec_bench.loaders.markdown_dir_loader import MarkdownDirLoader
+
+TOP_K = 5
+STAGE = "dense_only"
+ADAPTER_NAME = "govec"
+
+
+def score(
+    retrieved: list[dict[str, object]], expected_source: str, expected_heading: str | None
+) -> tuple[bool, int | None]:
+    if expected_source == "NONE":
+        return False, None
+
+    for rank, chunk in enumerate(retrieved, start=1):
+        if chunk["source"] != expected_source:
+            continue
+        if expected_heading is None or expected_heading in str(chunk["heading"]):
+            return True, rank
+
+    return False, None
+
+
+def main() -> None:
+    chunker = SizeBoundChunker(MarkdownHeadingChunker())
+    chunks = load_chunks(MarkdownDirLoader(), chunker)
+
+    embedder = Embedder["sentence-transformers"]()
+    items = to_insert_items(chunks, embedder)
+
+    adapter = build_adapters()[ADAPTER_NAME]
+    adapter.reset()
+    load_dataset(adapter, items)
+
+    db = get_db()
+    ensure_schema(db)
+    insert_questions(db, QUESTIONS)
+    run_id = insert_run(db, stage=STAGE)
+
+    results = []
+    for question in QUESTIONS:
+        query_vector = embedder.embed_query(question.question)
+        retrieved: list[dict[str, object]] = [
+            {
+                "score": r.score,
+                "source": (r.metadata or {}).get("source", ""),
+                "heading": (r.metadata or {}).get("heading", ""),
+            }
+            for r in adapter.query(query_vector, k=TOP_K)
+        ]
+
+        hit, rank = score(retrieved, question.expected_source, question.expected_heading)
+        results.append(
+            EvalResult(run_id=run_id, question_id=question.question_id, retrieved=retrieved, hit=hit, rank=rank)
+        )
+
+    insert_results(db, results)
+
+    misses = [r.question_id for r in results if not r.hit]
+    print(f"Wrote {len(results)} results to {DB_PATH} (run_id={run_id}, stage={STAGE}, adapter={ADAPTER_NAME})")
+    print(f"recall@{TOP_K}: {recall_at_k(db, STAGE):.1%}")
+    print(f"misses ({len(misses)}): {misses}")
+
+
+if __name__ == "__main__":
+    main()
