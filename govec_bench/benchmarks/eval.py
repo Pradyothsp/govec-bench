@@ -1,3 +1,8 @@
+from collections.abc import Callable
+
+import sqlite_utils
+
+from govec_bench.adapters.base import QueryResult
 from govec_bench.adapters.registry import build_adapters
 from govec_bench.benchmarks.common import load_dataset
 from govec_bench.chunkers.markdown_heading_chunker import MarkdownHeadingChunker
@@ -8,6 +13,7 @@ from govec_bench.embeddings.sentence_transformers_embedder import SentenceTransf
 from govec_bench.eval.questions import QUESTIONS
 from govec_bench.eval.store import (
     DB_PATH,
+    EvalQuestion,
     EvalResult,
     ensure_schema,
     get_db,
@@ -17,10 +23,25 @@ from govec_bench.eval.store import (
     recall_at_k,
 )
 from govec_bench.loaders.markdown_dir_loader import MarkdownDirLoader
+from govec_bench.retrieval.bm25_index import BM25Index
+from govec_bench.retrieval.fusion import fuse
 
 TOP_K = 5
-STAGE = "dense_only"
+CANDIDATE_K = 20
+DENSE_ONLY_STAGE = "dense_only"
+HYBRID_STAGE = "hybrid"
 ADAPTER_NAME = "govec"
+
+
+def to_retrieved(results: list[QueryResult]) -> list[dict[str, object]]:
+    return [
+        {
+            "score": r.score,
+            "source": (r.metadata or {}).get("source", ""),
+            "heading": (r.metadata or {}).get("heading", ""),
+        }
+        for r in results
+    ]
 
 
 def score(
@@ -38,6 +59,29 @@ def score(
     return False, None
 
 
+def run_stage(
+    db: sqlite_utils.Database,
+    stage: str,
+    questions: list[EvalQuestion],
+    retrieve: Callable[[str], list[QueryResult]],
+) -> None:
+    run_id = insert_run(db, stage=stage)
+
+    results = []
+    for question in questions:
+        retrieved = to_retrieved(retrieve(question.question))
+        hit, rank = score(retrieved, question.expected_source, question.expected_heading)
+        results.append(
+            EvalResult(run_id=run_id, question_id=question.question_id, retrieved=retrieved, hit=hit, rank=rank)
+        )
+
+    insert_results(db, results)
+
+    misses = [r.question_id for r in results if not r.hit]
+    print(f"{stage}: recall@{TOP_K} = {recall_at_k(db, stage):.1%}  (run_id={run_id}, {len(misses)} misses)")
+    print(f"  misses: {misses}")
+
+
 def main() -> None:
     chunker = SizeBoundChunker(MarkdownHeadingChunker())
     chunks = load_chunks(MarkdownDirLoader(), chunker)
@@ -49,34 +93,24 @@ def main() -> None:
     adapter.reset()
     load_dataset(adapter, items)
 
+    lexical_index = BM25Index(chunks)
+
     db = get_db()
     ensure_schema(db)
     insert_questions(db, QUESTIONS)
-    run_id = insert_run(db, stage=STAGE)
 
-    results = []
-    for question in QUESTIONS:
-        query_vector = embedder.embed_query(question.question)
-        retrieved: list[dict[str, object]] = [
-            {
-                "score": r.score,
-                "source": (r.metadata or {}).get("source", ""),
-                "heading": (r.metadata or {}).get("heading", ""),
-            }
-            for r in adapter.query(query_vector, k=TOP_K)
-        ]
+    def dense_retrieve(question_text: str) -> list[QueryResult]:
+        return adapter.query(embedder.embed_query(question_text), k=TOP_K)
 
-        hit, rank = score(retrieved, question.expected_source, question.expected_heading)
-        results.append(
-            EvalResult(run_id=run_id, question_id=question.question_id, retrieved=retrieved, hit=hit, rank=rank)
-        )
+    def hybrid_retrieve(question_text: str) -> list[QueryResult]:
+        query_vector = embedder.embed_query(question_text)
+        dense_results = adapter.query(query_vector, k=CANDIDATE_K)
+        lexical_results = lexical_index.search(question_text, k=CANDIDATE_K)
+        return fuse(dense_results, lexical_results)[:TOP_K]
 
-    insert_results(db, results)
-
-    misses = [r.question_id for r in results if not r.hit]
-    print(f"Wrote {len(results)} results to {DB_PATH} (run_id={run_id}, stage={STAGE}, adapter={ADAPTER_NAME})")
-    print(f"recall@{TOP_K}: {recall_at_k(db, STAGE):.1%}")
-    print(f"misses ({len(misses)}): {misses}")
+    print(f"Using {DB_PATH} (adapter={ADAPTER_NAME})")
+    run_stage(db, DENSE_ONLY_STAGE, QUESTIONS, dense_retrieve)
+    run_stage(db, HYBRID_STAGE, QUESTIONS, hybrid_retrieve)
 
 
 if __name__ == "__main__":
