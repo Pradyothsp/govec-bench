@@ -20,6 +20,7 @@ dependencies = [
     "streamlit>=1.62.0",
     "sqlite-utils>=4.2.1",
     "rank-bm25>=0.2.2",
+    "pydantic-ai>=2.36.0",
 ]
 
 [dependency-groups]

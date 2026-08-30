@@ -1,7 +1,9 @@
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, field
 
 import streamlit as st
 
+from govec_bench.adapters.base import QueryResult as AdapterQueryResult
 from govec_bench.adapters.base import VectorDBAdapter
 from govec_bench.adapters.registry import build_adapters
 from govec_bench.benchmarks.common import load_dataset
@@ -10,10 +12,16 @@ from govec_bench.chunkers.size_bound_chunker import SizeBoundChunker
 from govec_bench.datasets.documents import load_chunks, to_insert_items
 from govec_bench.embeddings.base import Embedder
 from govec_bench.embeddings.sentence_transformers_embedder import SentenceTransformersEmbedder  # noqa: F401
+from govec_bench.generation.pydantic_ai_generator import PydanticAIGenerator
 from govec_bench.loaders.markdown_dir_loader import MarkdownDirLoader
+from govec_bench.retrieval.bm25_index import BM25Index
+from govec_bench.retrieval.fusion import fuse
 from govec_bench.types import Vector
 
 TOP_K_DEFAULT = 5
+CANDIDATE_K = 20
+PRIMARY_ADAPTER_NAME = "govec"
+GENERATOR_MODEL_ENV_VAR = "GOVEC_BENCH_GENERATOR_MODEL"
 
 EXAMPLE_QUESTIONS = [
     "What causes govec's batch insert to be slower than Chroma's?",
@@ -42,10 +50,11 @@ class QueryResult:
     question: str
     results: list[DatabaseResult]
     answer: str | None = None
+    answer_sources: list[RetrievedChunk] = field(default_factory=list)
 
 
 @st.cache_resource(show_spinner="Loading corpus and connecting to vector databases...")
-def load_corpus() -> tuple[Embedder, dict[str, VectorDBAdapter]]:
+def load_corpus() -> tuple[Embedder, dict[str, VectorDBAdapter], BM25Index]:
     chunker = SizeBoundChunker(MarkdownHeadingChunker())
     chunks = load_chunks(MarkdownDirLoader(), chunker)
 
@@ -62,41 +71,83 @@ def load_corpus() -> tuple[Embedder, dict[str, VectorDBAdapter]]:
         load_dataset(adapter, items)
         adapters[name] = adapter
 
-    return embedder, adapters
+    lexical_index = BM25Index(chunks)
+
+    return embedder, adapters, lexical_index
 
 
-def run_query(question: str, query_vector: Vector, adapters: dict[str, VectorDBAdapter], k: int) -> QueryResult:
+def to_retrieved_chunk(result: AdapterQueryResult) -> RetrievedChunk:
+    return RetrievedChunk(
+        score=max(0.0, min(1.0, result.score)),
+        source=(result.metadata or {}).get("source", ""),
+        heading=(result.metadata or {}).get("heading", ""),
+        text=(result.metadata or {}).get("text", ""),
+    )
+
+
+def generate_answer(
+    question: str,
+    query_vector: Vector,
+    adapter: VectorDBAdapter,
+    lexical_index: BM25Index,
+    k: int,
+) -> tuple[str, list[RetrievedChunk]] | None:
+    model = os.environ.get(GENERATOR_MODEL_ENV_VAR)
+    if not model:
+        return None
+
+    dense_results = adapter.query(query_vector, k=CANDIDATE_K)
+    lexical_results = lexical_index.search(question, k=CANDIDATE_K)
+    fused = fuse(dense_results, lexical_results)[:k]
+
+    generator = PydanticAIGenerator(model=model)
+    return generator.generate(question, fused), [to_retrieved_chunk(r) for r in fused]
+
+
+def run_query(
+    question: str, query_vector: Vector, adapters: dict[str, VectorDBAdapter], lexical_index: BM25Index, k: int
+) -> QueryResult:
     results = []
 
     for name, adapter in adapters.items():
-        chunks = [
-            RetrievedChunk(
-                score=max(0.0, min(1.0, r.score)),
-                source=(r.metadata or {}).get("source", ""),
-                heading=(r.metadata or {}).get("heading", ""),
-                text=(r.metadata or {}).get("text", ""),
-            )
-            for r in adapter.query(query_vector, k=k)
-        ]
+        chunks = [to_retrieved_chunk(r) for r in adapter.query(query_vector, k=k)]
         results.append(DatabaseResult(db_name=name, chunks=chunks))
 
-    return QueryResult(question=question, results=results)
+    answer, answer_sources = None, []
+    if PRIMARY_ADAPTER_NAME in adapters:
+        generated = generate_answer(question, query_vector, adapters[PRIMARY_ADAPTER_NAME], lexical_index, k)
+        if generated is not None:
+            answer, answer_sources = generated
+
+    return QueryResult(question=question, results=results, answer=answer, answer_sources=answer_sources)
 
 
 def run_query_with_retry(
-    question: str, embedder: Embedder, adapters: dict[str, VectorDBAdapter], k: int
+    question: str, embedder: Embedder, adapters: dict[str, VectorDBAdapter], lexical_index: BM25Index, k: int
 ) -> QueryResult:
     query_vector = embedder.embed_query(question)
 
     try:
-        return run_query(question, query_vector, adapters, k)
+        return run_query(question, query_vector, adapters, lexical_index, k)
     except Exception:  # noqa: BLE001 -- a cached DB connection may have been invalidated by an external reset (e.g. a benchmark script run elsewhere); reconnect once and retry
         load_corpus.clear()
-        _, adapters = load_corpus()
-        return run_query(question, query_vector, adapters, k)
+        _, adapters, lexical_index = load_corpus()
+        return run_query(question, query_vector, adapters, lexical_index, k)
 
 
 def render_result(result: QueryResult) -> None:
+    if result.answer is not None:
+        st.markdown("### Answer")
+        st.write(result.answer)
+
+        if result.answer_sources:
+            st.caption("Sources (hybrid retrieval: dense + BM25, RRF-fused):")
+            for i, chunk in enumerate(result.answer_sources, start=1):
+                st.caption(f"[{i}] {chunk.heading} — {chunk.source}")
+    else:
+        st.caption(f"Set {GENERATOR_MODEL_ENV_VAR} to a PydanticAI model string to enable answer generation.")
+
+    st.divider()
     st.caption(
         "Scores often agree to 5-6 decimal places across databases -- at this corpus size (690 chunks), "
         "govec, Chroma, and Qdrant are computing the same cosine similarity on the same vectors, so their "
@@ -124,7 +175,7 @@ def main() -> None:
         "and compare retrieval across live vector databases."
     )
 
-    embedder, adapters = load_corpus()
+    embedder, adapters, lexical_index = load_corpus()
 
     if not adapters:
         st.error("No vector databases are reachable. Run `task docker:up`, then reload this page.")
@@ -147,7 +198,7 @@ def main() -> None:
     if not question:
         return
 
-    result = run_query_with_retry(question, embedder, adapters, k)
+    result = run_query_with_retry(question, embedder, adapters, lexical_index, k)
     render_result(result)
 
 
