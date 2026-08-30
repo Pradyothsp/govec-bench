@@ -23,6 +23,7 @@ from govec_bench.eval.store import (
     recall_at_k,
 )
 from govec_bench.loaders.markdown_dir_loader import MarkdownDirLoader
+from govec_bench.rerankers.cross_encoder_reranker import CrossEncoderReranker
 from govec_bench.retrieval.bm25_index import BM25Index
 from govec_bench.retrieval.fusion import fuse
 
@@ -30,6 +31,7 @@ TOP_K = 5
 CANDIDATE_K = 20
 DENSE_ONLY_STAGE = "dense_only"
 HYBRID_STAGE = "hybrid"
+HYBRID_RERANK_STAGE = "hybrid_rerank"
 ADAPTER_NAME = "govec"
 
 
@@ -44,16 +46,20 @@ def to_retrieved(results: list[QueryResult]) -> list[dict[str, object]]:
     ]
 
 
-def score(
-    retrieved: list[dict[str, object]], expected_source: str, expected_heading: str | None
-) -> tuple[bool, int | None]:
-    if expected_source == "NONE":
+def _matches(chunk: dict[str, object], source: str, heading: str | None) -> bool:
+    if chunk["source"] != source:
+        return False
+    return heading is None or heading in str(chunk["heading"])
+
+
+def score(retrieved: list[dict[str, object]], question: EvalQuestion) -> tuple[bool, int | None]:
+    if question.expected_source == "NONE":
         return False, None
 
+    acceptable = [(question.expected_source, question.expected_heading), *question.alternates]
+
     for rank, chunk in enumerate(retrieved, start=1):
-        if chunk["source"] != expected_source:
-            continue
-        if expected_heading is None or expected_heading in str(chunk["heading"]):
+        if any(_matches(chunk, source, heading) for source, heading in acceptable):
             return True, rank
 
     return False, None
@@ -70,7 +76,7 @@ def run_stage(
     results = []
     for question in questions:
         retrieved = to_retrieved(retrieve(question.question))
-        hit, rank = score(retrieved, question.expected_source, question.expected_heading)
+        hit, rank = score(retrieved, question)
         results.append(
             EvalResult(run_id=run_id, question_id=question.question_id, retrieved=retrieved, hit=hit, rank=rank)
         )
@@ -94,6 +100,7 @@ def main() -> None:
     load_dataset(adapter, items)
 
     lexical_index = BM25Index(chunks)
+    reranker = CrossEncoderReranker()
 
     db = get_db()
     ensure_schema(db)
@@ -102,15 +109,22 @@ def main() -> None:
     def dense_retrieve(question_text: str) -> list[QueryResult]:
         return adapter.query(embedder.embed_query(question_text), k=TOP_K)
 
-    def hybrid_retrieve(question_text: str) -> list[QueryResult]:
+    def fused_candidates(question_text: str) -> list[QueryResult]:
         query_vector = embedder.embed_query(question_text)
         dense_results = adapter.query(query_vector, k=CANDIDATE_K)
         lexical_results = lexical_index.search(question_text, k=CANDIDATE_K)
-        return fuse(dense_results, lexical_results)[:TOP_K]
+        return fuse(dense_results, lexical_results)
+
+    def hybrid_retrieve(question_text: str) -> list[QueryResult]:
+        return fused_candidates(question_text)[:TOP_K]
+
+    def hybrid_rerank_retrieve(question_text: str) -> list[QueryResult]:
+        return reranker.rerank(question_text, fused_candidates(question_text), k=TOP_K)
 
     print(f"Using {DB_PATH} (adapter={ADAPTER_NAME})")
     run_stage(db, DENSE_ONLY_STAGE, QUESTIONS, dense_retrieve)
     run_stage(db, HYBRID_STAGE, QUESTIONS, hybrid_retrieve)
+    run_stage(db, HYBRID_RERANK_STAGE, QUESTIONS, hybrid_rerank_retrieve)
 
 
 if __name__ == "__main__":

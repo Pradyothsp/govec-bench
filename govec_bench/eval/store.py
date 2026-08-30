@@ -2,11 +2,19 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
+from typing import NamedTuple, cast
 
 import sqlite_utils
 
 DB_PATH = Path("results") / "eval.db"
+
+
+class AltSource(NamedTuple):
+    # STATUS.md findings and their linked `docs/architecture/*.md` writeups
+    # often describe the same fact in overlapping prose -- an alternate is a
+    # second (source, heading) pair that's equally correct for a question.
+    source: str
+    heading: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,6 +24,7 @@ class EvalQuestion:
     expected_source: str
     expected_heading: str | None = None
     gold_answer: str | None = None
+    alternates: tuple[AltSource, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +52,7 @@ def ensure_schema(db: sqlite_utils.Database) -> None:
                 "expected_source": str,
                 "expected_heading": str,
                 "gold_answer": str,
+                "alternates": str,
             },
             pk="question_id",
         )
@@ -72,7 +82,13 @@ def ensure_schema(db: sqlite_utils.Database) -> None:
 
 
 def insert_questions(db: sqlite_utils.Database, questions: list[EvalQuestion]) -> None:
-    db.table("eval_questions").upsert_all([asdict(q) for q in questions], pk="question_id")
+    rows = []
+    for question in questions:
+        row = asdict(question)
+        row["alternates"] = json.dumps([[alt.source, alt.heading] for alt in question.alternates])
+        rows.append(row)
+
+    db.table("eval_questions").upsert_all(rows, pk="question_id")
 
 
 def insert_run(db: sqlite_utils.Database, stage: str, git_commit: str | None = None) -> int:

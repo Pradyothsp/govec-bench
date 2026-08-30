@@ -10,9 +10,18 @@ Two negative controls (carried over from `benchmarks/rag.py`'s original
 question set) are appended at the end -- they re-test the two known §25
 regressions: the `METADATA_INDEX.md` miss (via `arch-metadata-index` above)
 and the multi-tenancy negation blind spot (`neg-multi-tenancy` below).
+
+`alternates`: several STATUS.md findings explicitly cite a `docs/architecture/*.md`
+"Full writeup"/"Full analysis"/"Full details" doc that describes the same fact in
+overlapping prose (confirmed via `git grep 'docs/architecture/' STATUS.md`, plus
+one pair -- §9/`arch-ef-construction` -- found empirically via the step-3 reranker
+investigation: `HNSW_EF_CONSTRUCTION.md`'s "The Problem" section restates §9's
+finding almost verbatim). Where that's the case, both questions in the pair list
+the other as an alternate so a retriever isn't penalized for finding the equally
+correct twin passage instead of the one arbitrarily picked as "the" answer.
 """
 
-from govec_bench.eval.store import EvalQuestion
+from govec_bench.eval.store import AltSource, EvalQuestion
 
 _STATUS_SOURCE = "govec-bench_STATUS"
 
@@ -40,6 +49,7 @@ QUESTIONS: list[EvalQuestion] = [
             "compared against the best result instead of the worst kept; and the termination condition "
             "diverged from the canonical SEARCH-LAYER algorithm."
         ),
+        alternates=(AltSource("govec_docs_architecture_HNSW_SEARCH_RECALL_BUGS"),),
     ),
     EvalQuestion(
         question_id="status-2",
@@ -51,6 +61,7 @@ QUESTIONS: list[EvalQuestion] = [
             "cosine; after adding euclidean end-to-end, brute-force + euclidean hit exactly 100% recall at "
             "every k."
         ),
+        alternates=(AltSource("govec_docs_architecture_DISTANCE_METRICS"),),
     ),
     EvalQuestion(
         question_id="status-3",
@@ -96,6 +107,7 @@ QUESTIONS: list[EvalQuestion] = [
             "whole-batch durability, a real contract change left as a deliberate trade-off rather than fixed "
             "right away."
         ),
+        alternates=(AltSource("govec_docs_architecture_BATCH_INSERT_PERFORMANCE"),),
     ),
     EvalQuestion(
         question_id="status-7",
@@ -134,6 +146,7 @@ QUESTIONS: list[EvalQuestion] = [
             "default; that erased govec's single-insert advantage entirely and widened the batch-insert gap "
             "to ~29x."
         ),
+        alternates=(AltSource("govec_docs_architecture_HNSW_EF_CONSTRUCTION", "The Problem"),),
     ),
     EvalQuestion(
         question_id="status-10",
@@ -147,6 +160,7 @@ QUESTIONS: list[EvalQuestion] = [
             "breadth, so a cheap ef_search (needed for fast queries) also meant a low-quality, cheaply-built "
             "graph; adding a distinct ef_construction let it build a good graph while keeping ef_search cheap."
         ),
+        alternates=(AltSource("govec_docs_architecture_HNSW_EF_CONSTRUCTION", "The Problem"),),
     ),
     EvalQuestion(
         question_id="status-11",
@@ -162,6 +176,7 @@ QUESTIONS: list[EvalQuestion] = [
             "91.0%, while single-insert cost nearly quadrupled; this is the empirical case for implementing "
             "SELECT-NEIGHBORS-HEURISTIC instead of just raising M."
         ),
+        alternates=(AltSource("govec_docs_architecture_HNSW_NEIGHBOR_SELECTION"),),
     ),
     EvalQuestion(
         question_id="status-12",
@@ -265,6 +280,7 @@ QUESTIONS: list[EvalQuestion] = [
             "got only ~21% slower, not the ~2x a naive doubling-of-threads assumption would predict; the "
             "remaining ~5.29x is a real architecture/language gap."
         ),
+        alternates=(AltSource("govec_docs_architecture_HNSW_CONCURRENT_INSERT"),),
     ),
     EvalQuestion(
         question_id="status-20",
@@ -288,6 +304,10 @@ QUESTIONS: list[EvalQuestion] = [
             "Setting GOMEMLIMIT=250MiB cut measured RAM by 46% (592.8MB to 319.2MB) with no latency cost, "
             "showing most of the gap was Go's GC/allocator timing rather than real storage cost -- though it "
             "wasn't adopted as a default since the value is dataset-size-specific."
+        ),
+        alternates=(
+            AltSource("govec_docs_architecture_HNSW_MEMORY_LAYOUT"),
+            AltSource("govec_docs_architecture_MEMORY_TUNING", "The `GOMEMLIMIT` Experiment"),
         ),
     ),
     EvalQuestion(
@@ -351,6 +371,9 @@ QUESTIONS: list[EvalQuestion] = [
             "request, making each insert individually crash-durable at a steep per-vector I/O cost, unlike "
             "Chroma's single batch commit."
         ),
+        alternates=(
+            AltSource("govec-bench_STATUS", _status_heading(6, "govec's batch-insert gap is a durability trade-off, not a bug")),
+        ),
     ),
     EvalQuestion(
         question_id="arch-distance-metrics",
@@ -362,6 +385,7 @@ QUESTIONS: list[EvalQuestion] = [
             "against it requires euclidean support; cosine remains the default for typical normalized-"
             "embedding use cases."
         ),
+        alternates=(AltSource("govec-bench_STATUS", _status_heading(2, "Added Euclidean distance to govec")),),
     ),
     EvalQuestion(
         question_id="arch-concurrent-insert",
@@ -371,6 +395,12 @@ QUESTIONS: list[EvalQuestion] = [
         gold_answer=(
             "govec's internal/hnsw has no internal concurrency at all -- inserts run strictly one item at a "
             "time -- while hnswlib (used by Chroma) parallelizes insertion across threads."
+        ),
+        alternates=(
+            AltSource(
+                "govec-bench_STATUS",
+                _status_heading(19, "Measured how much of the batch-insert gap is Chroma using more CPU — real, but modest (~21%, not most of it)"),
+            ),
         ),
     ),
     EvalQuestion(
@@ -383,6 +413,20 @@ QUESTIONS: list[EvalQuestion] = [
             "breadth, so a cheap ef_search (for fast queries) also meant a low-quality, cheaply-built graph; "
             "splitting them lets construction be thorough while search stays cheap."
         ),
+        alternates=(
+            AltSource(
+                "govec-bench_STATUS",
+                _status_heading(9, "Matching Chroma's recall costs govec far more on inserts than expected"),
+            ),
+            AltSource(
+                "govec-bench_STATUS",
+                _status_heading(
+                    10,
+                    "Root cause: govec's HNSW has no distinct `ef_construction` — it reuses `ef_search` for graph "
+                    "building too",
+                ),
+            ),
+        ),
     ),
     EvalQuestion(
         question_id="arch-memory-layout",
@@ -393,6 +437,12 @@ QUESTIONS: list[EvalQuestion] = [
             "layer.nodes and the metadata store are still Go hash maps even though node IDs are already "
             "dense integers, meaning they could be flattened into dense ID-indexed arrays for a further "
             "memory win, the same class of fix already shipped for addNeighbor."
+        ),
+        alternates=(
+            AltSource(
+                "govec-bench_STATUS",
+                _status_heading(21, 'RAM wasn\'t the gap it looked like — and recall@50\'s "reversal" isn\'t one either'),
+            ),
         ),
     ),
     EvalQuestion(
@@ -405,6 +455,16 @@ QUESTIONS: list[EvalQuestion] = [
             "rule that can leave neighbors landing in already-well-covered regions instead of new, useful "
             "parts of the graph, unlike the heuristic hnswlib (and thus Chroma) uses."
         ),
+        alternates=(
+            AltSource(
+                "govec-bench_STATUS",
+                _status_heading(
+                    11,
+                    "`M` sweep: raising `M` alone can't close the gap to Chroma — evidence *for* heuristic selection, "
+                    "not an alternative to it",
+                ),
+            ),
+        ),
     ),
     EvalQuestion(
         question_id="arch-search-recall-bugs",
@@ -415,6 +475,7 @@ QUESTIONS: list[EvalQuestion] = [
             "The search loop's 'did this help' check compared a candidate against the best result found so "
             "far instead of the worst currently kept, causing the search to give up almost immediately."
         ),
+        alternates=(AltSource("govec-bench_STATUS", _status_heading(1, "govec's HNSW implementation had three real bugs")),),
     ),
     EvalQuestion(
         question_id="arch-id-mapping",
@@ -436,6 +497,12 @@ QUESTIONS: list[EvalQuestion] = [
             "GOMEMLIMIT is a Go 1.19+ soft memory cap that cut govec's measured RSS by 46% with no latency "
             "cost in testing, but it's a fixed cap tuned to one dataset size, so it isn't defaulted since it "
             "would be wrong (too tight or too loose) for other data sizes."
+        ),
+        alternates=(
+            AltSource(
+                "govec-bench_STATUS",
+                _status_heading(21, 'RAM wasn\'t the gap it looked like — and recall@50\'s "reversal" isn\'t one either'),
+            ),
         ),
     ),
     EvalQuestion(
