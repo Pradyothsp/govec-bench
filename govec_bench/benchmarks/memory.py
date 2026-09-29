@@ -9,7 +9,7 @@ from govec_bench.adapters.chroma_adapter import ChromaAdapter
 from govec_bench.adapters.govec_adapter import GovecAdapter
 from govec_bench.adapters.qdrant_adapter import QdrantAdapter
 from govec_bench.benchmarks.common import compose, docker, load_dataset, wait_until_queryable
-from govec_bench.datasets.synthetic import load_sift100k
+from govec_bench.datasets.sift import load_sift100k
 from govec_bench.results import write_results
 
 # Generous: this waits out a full container recreation (docker compose down

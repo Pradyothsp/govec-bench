@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from govec_bench.datasets.synthetic import read_fvecs, read_ivecs
+from govec_bench.datasets.sift import read_fvecs, read_ivecs
 
 
 @pytest.fixture

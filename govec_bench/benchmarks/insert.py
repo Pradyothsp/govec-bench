@@ -4,7 +4,7 @@ from dataclasses import asdict
 from govec_bench.adapters.base import InsertItem, VectorDBAdapter
 from govec_bench.adapters.govec_adapter import GovecAdapter
 from govec_bench.adapters.registry import build_adapters
-from govec_bench.datasets.synthetic import load_sift10k
+from govec_bench.datasets.sift import load_sift10k
 from govec_bench.results import LatencyStats, compute_latency_stats, write_results
 
 BATCH_SIZE = 100
