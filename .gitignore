@@ -17,3 +17,13 @@ data/
 
 # benchmark output (regenerated via task bench:*)
 results/
+
+# agent tooling and local scratch
+.agents/
+.claude/
+.taken.yaml
+identifier.sqlite
+
+# planning docs (kept in the private govec-notes repo)
+RAG_V2_PLAN.md
+govec_bench_plan.md

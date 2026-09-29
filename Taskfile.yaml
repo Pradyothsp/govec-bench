@@ -59,7 +59,6 @@ tasks:
       - task: bench:recall
       - task: bench:memory
       - task: bench:coldstart
-      - task: bench:rag
 
   bench:insert:
     desc: Insert latency benchmark
@@ -90,13 +89,3 @@ tasks:
     aliases:
       - bench-coldstart
     cmd: uv run python -m govec_bench.benchmarks.cold_start
-
-  bench:rag:
-    desc: Real-document RAG comparison
-    aliases:
-      - bench-rag
-    cmd: uv run python -m govec_bench.benchmarks.rag
-
-  dashboard:
-    desc: Launch Streamlit dashboard
-    cmd: uv run streamlit run govec_bench/dashboard/app.py
