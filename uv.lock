@@ -442,9 +442,11 @@ wheels = [
 [[package]]
 name = "govec"
 version = "0.1.0"
-source = { git = "ssh://git@github.com/Pradyothsp/govec-python.git#b362502a1f9b81ae3936990e3747569892bc5059" }
+source = { git = "ssh://git@github.com/Pradyothsp/govec-python.git#f82933dafd3e0b578f19d7a591241556f4741229" }
 dependencies = [
+    { name = "grpcio" },
     { name = "httpx" },
+    { name = "protobuf" },
 ]
 
 [[package]]
