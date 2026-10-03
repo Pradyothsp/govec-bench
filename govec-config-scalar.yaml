@@ -4,7 +4,7 @@
 
 server:
   host: ""
-  port: 8000
+  port: 9697
   shutdown_timeout: 10s
   log_level: "info"
 
@@ -29,5 +29,5 @@ engine:
 
 grpc:
   enabled: false # not used by the benchmark adapters; disabled to keep the container's footprint minimal
-  port: 50051
+  port: 9698
   max_recv_msg_size_mb: 64

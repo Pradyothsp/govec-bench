@@ -43,8 +43,8 @@ def main() -> None:
     # no use for a second govec variant. Scoped to this benchmark only,
     # following recall.py's existing pattern, to measure whether int8 scalar
     # quantization (govec-config-scalar.yaml, the govec-scalar service on
-    # port 8002) costs anything on insert latency.
-    adapters["govec-scalar"] = GovecAdapter(port=8002)
+    # port 9699) costs anything on insert latency.
+    adapters["govec-scalar"] = GovecAdapter(port=9699)
 
     results: dict[str, object] = {}
     for name, adapter in adapters.items():

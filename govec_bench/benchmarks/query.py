@@ -27,8 +27,8 @@ def main() -> None:
     adapters = build_adapters()
     # Not in build_adapters() -- see insert.py/recall.py's identical comment:
     # a second govec variant to measure int8 scalar quantization's query cost
-    # (govec-config-scalar.yaml, the govec-scalar service on port 8002).
-    adapters["govec-scalar"] = GovecAdapter(port=8002)
+    # (govec-config-scalar.yaml, the govec-scalar service on port 9699).
+    adapters["govec-scalar"] = GovecAdapter(port=9699)
 
     results: dict[str, object] = {}
     for name, adapter in adapters.items():

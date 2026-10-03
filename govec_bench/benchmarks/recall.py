@@ -48,9 +48,9 @@ def main() -> None:
     # Not in build_adapters() -- that dict is shared with insert.py/query.py,
     # which have no use for a second govec variant. Scoped to this benchmark
     # only, to measure the accuracy cost of int8 scalar quantization
-    # (govec-config-scalar.yaml, the govec-scalar service on port 8002)
+    # (govec-config-scalar.yaml, the govec-scalar service on port 9699)
     # against the RAM/disk win already measured in memory.py.
-    adapters["govec-scalar"] = GovecAdapter(port=8002)
+    adapters["govec-scalar"] = GovecAdapter(port=9699)
 
     results: dict[str, object] = {}
     for name, adapter in adapters.items():

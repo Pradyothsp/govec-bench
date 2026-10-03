@@ -15,7 +15,7 @@ POLL_TIMEOUT_S = 60
 # service name (docker-compose.yml) -> adapter constructor
 SERVICES: dict[str, Callable[[], VectorDBAdapter]] = {
     "govec": GovecAdapter,
-    "govec-scalar": partial(GovecAdapter, port=8002),
+    "govec-scalar": partial(GovecAdapter, port=9699),
     "chroma": ChromaAdapter,
     "qdrant": QdrantAdapter,
 }

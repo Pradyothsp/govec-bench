@@ -11,7 +11,7 @@ class GovecAdapter(VectorDBAdapter):
     def __init__(
         self,
         host: str = "localhost",
-        port: int = 8000,
+        port: int = 9697,
         api_key: str = "",
         *,
         tls: bool = False,

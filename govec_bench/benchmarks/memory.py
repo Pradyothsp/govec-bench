@@ -28,7 +28,7 @@ POLL_TIMEOUT_S = 120
 RAM_SAMPLE_DELAYS_S = (0, 60)
 
 GOVEC_CONTAINER = "govec-bench-govec"
-GOVEC_DISK_PATHS = ("/app/govec_data.bin", "/app/govec.wal")
+GOVEC_DISK_PATHS = ("/data/govec_data.bin", "/data/govec.wal")
 GOVEC_SCALAR_CONTAINER = "govec-bench-govec-scalar"
 CHROMA_CONTAINER = "govec-bench-chroma"
 CHROMA_DISK_PATHS = ("/data",)
@@ -38,7 +38,7 @@ QDRANT_DISK_PATHS = ("/qdrant/storage",)
 # name -> (adapter constructor, container name, on-disk paths to measure)
 DBS: dict[str, tuple[Callable[[], VectorDBAdapter], str, tuple[str, ...]]] = {
     "govec": (GovecAdapter, GOVEC_CONTAINER, GOVEC_DISK_PATHS),
-    "govec-scalar": (partial(GovecAdapter, port=8002), GOVEC_SCALAR_CONTAINER, GOVEC_DISK_PATHS),
+    "govec-scalar": (partial(GovecAdapter, port=9699), GOVEC_SCALAR_CONTAINER, GOVEC_DISK_PATHS),
     "chroma": (ChromaAdapter, CHROMA_CONTAINER, CHROMA_DISK_PATHS),
     "qdrant": (QdrantAdapter, QDRANT_CONTAINER, QDRANT_DISK_PATHS),
 }
