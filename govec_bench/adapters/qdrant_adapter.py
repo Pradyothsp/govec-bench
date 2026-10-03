@@ -3,6 +3,7 @@ import uuid
 from collections.abc import Mapping, Sequence
 from typing import override
 
+import httpx
 from qdrant_client import QdrantClient
 from qdrant_client.http.exceptions import ResponseHandlingException
 from qdrant_client.models import Distance, HnswConfigDiff, OptimizersConfigDiff, PointStruct, VectorParams
@@ -45,7 +46,11 @@ def _to_point_id(vector_id: str) -> str:
 
 class QdrantAdapter(VectorDBAdapter):
     def __init__(self, host: str = "localhost", port: int = 6333) -> None:
-        self._client = QdrantClient(url=f"http://{host}:{port}")
+        # qdrant-client disables keep-alive for localhost by default, opening a
+        # new TCP connection per request. That puts a handshake inside every
+        # measured latency (the govec and Chroma clients reuse one connection),
+        # and 10k rapid single inserts exhaust Docker Desktop's port forwarding.
+        self._client = QdrantClient(url=f"http://{host}:{port}", limits=httpx.Limits())
         # Qdrant needs the vector dimension at collection-creation time, unlike
         # Chroma's lazy collection -- create it on first insert instead, once
         # a real vector tells us the dimension. Avoids hardcoding a dataset's
