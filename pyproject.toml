@@ -1,7 +1,7 @@
 [project]
 name = "govec-bench"
 version = "0.1.0"
-description = "Add your description here"
+description = "Benchmarks GoVec against Chroma and Qdrant: insert and query latency, recall, memory and cold start"
 readme = "README.md"
 authors = [
     { name = "Pradyoth", email = "sppradyoth@outlook.com" }
