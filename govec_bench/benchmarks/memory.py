@@ -18,9 +18,9 @@ POLL_TIMEOUT_S = 120
 
 # RAM checkpoints, seconds after both loads finish. Not a single "settled"
 # snapshot: govec's RSS drops sharply over the first few minutes post-load as
-# Go's scavenger returns freed pages to the OS (see STATUS.md #14) -- a
+# Go's scavenger returns freed pages to the OS -- a
 # one-shot measurement just encodes whatever moment you happened to sample.
-# Shortened to (0, 60) for routine runs -- STATUS.md #15 already established
+# Shortened to (0, 60) for routine runs -- an earlier investigation traced
 # the full descent curve out to t=300 (RSS is still descending even there, so
 # it was never a "settled" number either); this is a quick before/after
 # sanity check, not a re-run of that full characterization. The only

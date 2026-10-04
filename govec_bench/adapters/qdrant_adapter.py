@@ -24,7 +24,7 @@ COLLECTION_NAME = "govec_bench"
 # latency reflects "durable and indexed," not just "durable" -- a fairer
 # number for cross-adapter comparison, even if less flattering on its own.
 _INDEXING_POLL_INTERVAL_S = 0.05
-# 30s was fine at SIFT10K scale (STATUS.md §22) but too tight at SIFT100K --
+# 30s was fine at SIFT10K scale but too tight at SIFT100K --
 # indexing catch-up cost grows with collection size, and memory.py's own
 # DISK_STABILIZE_TIMEOUT_S (120s) already documents the same class of Qdrant
 # background-merge lag at this scale.

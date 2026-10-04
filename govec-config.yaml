@@ -1,5 +1,5 @@
 # govec config for govec-bench (mounted over the image's baked-in config.yaml).
-# Mirrors the "Recommended govec config.yaml for Fair Benchmarking" in STATUS.md.
+# HNSW and metric settings match what Chroma and Qdrant run with, so the comparison is like for like.
 
 server:
   host: ""
@@ -22,7 +22,7 @@ engine:
   dimensions: 128 # SIFT10K/100K are 128-dim
   enable_hybrid_search: true
   enable_metadata_index: false
-  hnsw_m: 16 # matches Chroma's own default; the M=48/M=24 re-tunings before this overcorrected -- see govec HNSW_NEIGHBOR_SELECTION.md sweep table
+  hnsw_m: 16 # matches Chroma's and Qdrant's defaults; earlier M=48 and M=24 tunings bought no recall for the extra memory
   hnsw_ef_search: 50 # raised from 20 -- buys back recall without costing anything at k=50, since resultCap=max(k,efSearch) is already 50 there regardless
   hnsw_ef_construction: 200 # govec's own factory default; M=16 needs a narrower candidate pool than M=24 did to reach the same recall
 
