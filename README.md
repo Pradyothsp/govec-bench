@@ -10,6 +10,10 @@ reproduce the numbers.
 October 2026, on a MacBook (Apple Silicon) with Docker Desktop. Each database ran with 2 CPUs and
 2 GB. Latencies are medians across 3–4 repeated runs; ranges are in [Run-to-run variation](#run-to-run-variation).
 
+Produced by [`v0.1.0`](https://github.com/Pradyothsp/govec-bench/tree/v0.1.0) of this harness,
+against the GoVec 0.1.0 server image and SDK 0.1.1. Check out that tag to reproduce these exact
+numbers.
+
 | | GoVec | GoVec (int8) | Chroma | Qdrant |
 |---|---:|---:|---:|---:|
 | Query latency, k=10 (mean) | 1.54 ms | **1.35 ms** | 2.54 ms | 1.89 ms |
