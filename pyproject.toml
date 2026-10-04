@@ -10,7 +10,7 @@ requires-python = ">=3.14"
 dependencies = [
     "chromadb>=1.5.9",
     "qdrant-client>=1.12.0",
-    "govec",
+    "govec>=0.1.1",
 ]
 
 [dependency-groups]
@@ -89,6 +89,3 @@ addopts = "--tb=short"
 markers = [
     "integration: requires external services",
 ]
-
-[tool.uv.sources]
-govec = { git = "ssh://git@github.com/Pradyothsp/govec-python.git" }

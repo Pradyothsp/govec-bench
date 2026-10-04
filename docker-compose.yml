@@ -1,13 +1,16 @@
+# Every database runs a pinned, published image, so anyone re-running this compares exactly the
+# versions behind the published numbers. Bump a pin deliberately, and re-run everything after.
 services:
   govec:
-    build:
-      context: ../govec
-      dockerfile: Dockerfile
+    image: ghcr.io/pradyothsp/govec:0.1.0
     container_name: govec-bench-govec
     ports:
       - "9697:9697"
+    # GOMEMLIMIT cuts govec's measured RAM by about 46% at no latency cost, but 250MiB is tuned to
+    # this benchmark's 100k-vector dataset and is no general default. Left off so every database
+    # runs on stock settings; uncomment to reproduce that experiment.
     # environment:
-    #   - GOMEMLIMIT=250MiB # cuts measured RAM ~46% at no latency cost (see govec's docs/architecture/MEMORY_TUNING.md) -- left commented out on purpose: 250MiB was tuned to this benchmark's 100k-vector dataset specifically and isn't a safe default for other workload sizes, so the baseline here stays govec's true out-of-the-box behavior (matching Chroma's own line below, which is also just its stock defaults). Uncomment to reproduce that experiment.
+    #   - GOMEMLIMIT=250MiB
     volumes:
       - ./govec-config.yaml:/app/config.yaml:ro
     healthcheck:
@@ -22,9 +25,7 @@ services:
           memory: 2G
 
   govec-scalar:
-    build:
-      context: ../govec
-      dockerfile: Dockerfile
+    image: ghcr.io/pradyothsp/govec:0.1.0
     container_name: govec-bench-govec-scalar
     ports:
       - "9699:9697"
@@ -42,7 +43,8 @@ services:
           memory: 2G
 
   chroma:
-    image: chromadb/chroma:latest
+    # Chroma 1.4.4, pinned by digest: Chroma publishes no tag for this release.
+    image: chromadb/chroma@sha256:1e0b73a187a28757c572acba508c46f48c9e8b0acaf5c20e6d95cdedce1acdf6
     container_name: govec-bench-chroma
     command: ["run", "/config.yaml"]
     ports:
@@ -57,7 +59,7 @@ services:
           memory: 2G
 
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.19.0
     container_name: govec-bench-qdrant
     ports:
       - "6333:6333" # REST, what the adapter uses
