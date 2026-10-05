@@ -4,17 +4,13 @@ from govec_bench.adapters.base import VectorDBAdapter
 from govec_bench.adapters.govec_adapter import GovecAdapter
 from govec_bench.adapters.registry import build_adapters
 from govec_bench.benchmarks.common import load_dataset
+from govec_bench.datasets.base import ArrayItems
 from govec_bench.datasets.groundtruth import exact_cosine_neighbors
-from govec_bench.datasets.sift import load_sift10k
+from govec_bench.datasets.registry import dataset_from_args
 from govec_bench.results import RecallStats, compute_recall_stats, write_results
 from govec_bench.types import NeighborIndices, Vector
 
 K_VALUES = [1, 5, 10, 50]
-
-# load_sift10k() assigns base vector IDs as f"sift10k_{i}", where i is the
-# vector's position in siftsmall_base.fvecs -- the positions the ground-truth
-# neighbor indices refer to.
-ID_PREFIX = "sift10k_"
 
 # Graded against exact cosine neighbors, computed here, because every database
 # searches with cosine. SIFT's shipped siftsmall_groundtruth.ivecs is Euclidean:
@@ -24,13 +20,14 @@ ID_PREFIX = "sift10k_"
 
 def measure_recall(
     adapter: VectorDBAdapter,
+    base: ArrayItems,
     queries: list[Vector],
     groundtruth: list[NeighborIndices],
     k: int,
 ) -> RecallStats:
     recalls = []
     for query, truth in zip(queries, groundtruth, strict=True):
-        expected = {f"{ID_PREFIX}{i}" for i in truth[:k]}
+        expected = {base.id_at(i) for i in truth[:k]}
         results = adapter.query(query, k=k)
         got = {r.id for r in results}
 
@@ -40,8 +37,8 @@ def measure_recall(
 
 
 def main() -> None:
-    dataset = load_sift10k()
-    groundtruth = exact_cosine_neighbors([item.vector for item in dataset.base], dataset.queries, max(K_VALUES))
+    dataset = dataset_from_args().small()
+    groundtruth = exact_cosine_neighbors(dataset.base.vectors, dataset.queries, max(K_VALUES))
 
     adapters = build_adapters()
     # Not in build_adapters() -- that dict is shared with insert.py/query.py,
@@ -56,9 +53,11 @@ def main() -> None:
         adapter.reset()
         load_dataset(adapter, dataset.base)
 
-        results[name] = {f"k_{k}": asdict(measure_recall(adapter, dataset.queries, groundtruth, k)) for k in K_VALUES}
+        results[name] = {
+            f"k_{k}": asdict(measure_recall(adapter, dataset.base, dataset.queries, groundtruth, k)) for k in K_VALUES
+        }
 
-    path = write_results(benchmark="recall", dataset="sift10k", results=results)
+    path = write_results(benchmark="recall", dataset=dataset.name, results=results)
     print(f"Wrote {path}")
 
 

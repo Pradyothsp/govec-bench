@@ -9,7 +9,7 @@ from govec_bench.adapters.chroma_adapter import ChromaAdapter
 from govec_bench.adapters.govec_adapter import GovecAdapter
 from govec_bench.adapters.qdrant_adapter import QdrantAdapter
 from govec_bench.benchmarks.common import compose, docker, load_dataset, wait_until_queryable
-from govec_bench.datasets.sift import load_sift100k
+from govec_bench.datasets.registry import dataset_from_args
 from govec_bench.results import write_results
 
 # Generous: this waits out a full container recreation (docker compose down
@@ -170,7 +170,7 @@ def main() -> None:
 
     baselines = {name: _measure(container, paths) for name, (_cls, container, paths) in DBS.items()}
 
-    dataset = load_sift100k()
+    dataset = dataset_from_args().large()
 
     for name, adapter in adapters.items():
         print(f"Loading {len(dataset.base)} vectors into {name}...")
@@ -188,7 +188,7 @@ def main() -> None:
         name: _result_to_json(_build_result(baselines[name], disk_after[name], ram_series[name])) for name in DBS
     }
 
-    path = write_results(benchmark="memory", dataset="sift100k", results=results)
+    path = write_results(benchmark="memory", dataset=dataset.name, results=results)
     print(f"Wrote {path}")
 
 

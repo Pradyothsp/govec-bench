@@ -20,7 +20,7 @@ engine:
   index_type: "hnsw" # ANN, to compare against Chroma's own HNSW index on equal footing
   quantization: "scalar" # int8 storage, ~4x memory reduction vs float32 -- see internal/core/quantize.go in govec
   distance_metric: "cosine" # matches ChromaAdapter's collection (hnsw:space: "cosine")
-  dimensions: 128 # SIFT10K/100K are 128-dim
+  dimensions: 0 # Learned from the first insert, as Chroma and Qdrant do, so one config serves every dataset
   enable_hybrid_search: true
   enable_metadata_index: false
   hnsw_m: 16 # matches Chroma's and Qdrant's defaults; earlier M=48 and M=24 tunings bought no recall for the extra memory

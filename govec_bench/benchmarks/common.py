@@ -3,7 +3,8 @@ import subprocess
 import time
 from collections.abc import Callable
 
-from govec_bench.adapters.base import InsertItem, VectorDBAdapter
+from govec_bench.adapters.base import VectorDBAdapter
+from govec_bench.datasets.base import ArrayItems
 
 SETUP_BATCH_SIZE = 100
 
@@ -12,7 +13,7 @@ DOCKER = shutil.which("docker")
 POLL_INTERVAL_S = 0.05
 
 
-def load_dataset(adapter: VectorDBAdapter, items: list[InsertItem], batch_size: int = SETUP_BATCH_SIZE) -> None:
+def load_dataset(adapter: VectorDBAdapter, items: ArrayItems, batch_size: int = SETUP_BATCH_SIZE) -> None:
     # Chunked rather than one giant batch_insert call -- some backends (e.g.
     # Chroma) enforce a max batch size well below typical dataset sizes.
     for i in range(0, len(items), batch_size):

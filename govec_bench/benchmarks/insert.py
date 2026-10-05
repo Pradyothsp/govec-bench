@@ -1,16 +1,17 @@
 import time
 from dataclasses import asdict
 
-from govec_bench.adapters.base import InsertItem, VectorDBAdapter
+from govec_bench.adapters.base import VectorDBAdapter
 from govec_bench.adapters.govec_adapter import GovecAdapter
 from govec_bench.adapters.registry import build_adapters
-from govec_bench.datasets.sift import load_sift10k
+from govec_bench.datasets.base import ArrayItems
+from govec_bench.datasets.registry import dataset_from_args
 from govec_bench.results import LatencyStats, compute_latency_stats, write_results
 
 BATCH_SIZE = 100
 
 
-def measure_single_insert(adapter: VectorDBAdapter, items: list[InsertItem]) -> LatencyStats:
+def measure_single_insert(adapter: VectorDBAdapter, items: ArrayItems) -> LatencyStats:
     latencies_ms = []
     for item in items:
         start = time.perf_counter()
@@ -20,7 +21,7 @@ def measure_single_insert(adapter: VectorDBAdapter, items: list[InsertItem]) -> 
     return compute_latency_stats(latencies_ms)
 
 
-def measure_batch_insert(adapter: VectorDBAdapter, items: list[InsertItem], batch_size: int) -> LatencyStats:
+def measure_batch_insert(adapter: VectorDBAdapter, items: ArrayItems, batch_size: int) -> LatencyStats:
     # Each sample is a batch's wall time divided by its size, so this is
     # directly comparable to the per-vector single-insert latency above.
     latencies_ms = []
@@ -37,7 +38,7 @@ def measure_batch_insert(adapter: VectorDBAdapter, items: list[InsertItem], batc
 
 
 def main() -> None:
-    dataset = load_sift10k()
+    dataset = dataset_from_args().small()
     adapters = build_adapters()
     # Not in build_adapters() -- that dict is shared with query.py, which has
     # no use for a second govec variant. Scoped to this benchmark only,
@@ -59,7 +60,7 @@ def main() -> None:
             "batch": asdict(batch_stats),
         }
 
-    path = write_results(benchmark="insert_latency", dataset="sift10k", results=results)
+    path = write_results(benchmark="insert_latency", dataset=dataset.name, results=results)
     print(f"Wrote {path}")
 
 

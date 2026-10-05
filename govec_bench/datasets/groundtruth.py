@@ -1,9 +1,10 @@
 import numpy as np
+import numpy.typing as npt
 
-from govec_bench.types import NeighborIndices, Vector
+from govec_bench.types import NeighborIndices
 
 
-def exact_cosine_neighbors(base: list[Vector], queries: list[Vector], k: int) -> list[NeighborIndices]:
+def exact_cosine_neighbors(base: npt.ArrayLike, queries: npt.ArrayLike, k: int) -> list[NeighborIndices]:
     """Each query's true top-k base vectors by cosine similarity, found by brute force.
 
     Recall must be graded against the metric the databases search with. Every database here runs

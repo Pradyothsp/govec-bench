@@ -20,9 +20,9 @@ several "GoVec wins" here have turned out to be measurement errors.
 | Command | Use |
 |---|---|
 | `uv sync --all-groups` | Set up the environment |
-| `task data:download` | Fetch SIFT10K and SIFT1M (SIFT100K is its first 100k vectors) |
+| `task data:download` | Fetch SIFT10K and SIFT1M (SIFT100K is its first 100k vectors); `DATASET=dbpedia` for the text embeddings |
 | `task docker:up` / `task docker:down` | Start / stop all databases |
-| `task bench:all` | Run all five benchmarks; each writes `results/<benchmark>_<timestamp>.json` |
+| `task bench:all` | Run all five benchmarks; each writes `results/<benchmark>_<timestamp>.json`. `DATASET=dbpedia` switches dataset |
 | `task bench:insert` (`query`, `recall`, `memory`, `coldstart`) | Run one benchmark |
 | `task test` | Unit tests |
 | `task fmt` / `task fmt:check` | Format and autofix / ruff + ty + format check |
@@ -39,8 +39,12 @@ govec_bench/
     qdrant_adapter.py  via qdrant-client, cosine distance, keep-alive forced on
     registry.py        build_adapters(): the databases every benchmark iterates
   benchmarks/          one script per benchmark; common.py has dataset loading and docker helpers
-  datasets/sift.py     fvecs/ivecs readers; SIFT10K and SIFT100K
-  datasets/groundtruth.py  exact cosine neighbours by brute force: the recall answer key
+  datasets/
+    base.py            VectorDataset; ArrayItems keeps vectors in one array, builds items on read
+    sift.py            fvecs/ivecs readers; SIFT10K and SIFT100K (128-dim image descriptors)
+    dbpedia.py         DBpedia 10k/100k: OpenAI ada-002 text embeddings, 1536-dim, from Parquet
+    registry.py        --dataset name -> (10k loader, 100k loader)
+    groundtruth.py     exact cosine neighbours by brute force: the recall answer key
   results.py           latency/recall statistics and the JSON results writer
 docker-compose.yml     the databases, pinned images, 2 CPU / 2 GB each
 govec-config*.yaml     GoVec's config for the float32 and int8 services

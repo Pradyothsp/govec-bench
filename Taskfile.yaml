@@ -20,10 +20,10 @@ tasks:
     cmd: uv run pytest
 
   data:download:
-    desc: Download SIFT10K and SIFT100K datasets
+    desc: Download a dataset (DATASET=sift, the default, or dbpedia)
     aliases:
       - data-download
-    cmd: uv run python scripts/download_datasets.py
+    cmd: uv run python scripts/download_datasets.py --dataset {{.DATASET | default "sift"}}
 
   docker:up:
     desc: Start the comparison vector DBs (Chroma, ...) via Docker Compose
@@ -50,7 +50,7 @@ tasks:
     cmd: ./scripts/docker_cleanup.sh
 
   bench:all:
-    desc: Run all benchmarks
+    desc: Run all benchmarks (DATASET=sift, the default, or dbpedia)
     aliases:
       - bench
     cmds:
@@ -64,25 +64,25 @@ tasks:
     desc: Insert latency benchmark
     aliases:
       - bench-insert
-    cmd: uv run python -m govec_bench.benchmarks.insert
+    cmd: uv run python -m govec_bench.benchmarks.insert --dataset {{.DATASET | default "sift"}}
 
   bench:query:
     desc: Query latency benchmark
     aliases:
       - bench-query
-    cmd: uv run python -m govec_bench.benchmarks.query
+    cmd: uv run python -m govec_bench.benchmarks.query --dataset {{.DATASET | default "sift"}}
 
   bench:recall:
     desc: Recall@k benchmark
     aliases:
       - bench-recall
-    cmd: uv run python -m govec_bench.benchmarks.recall
+    cmd: uv run python -m govec_bench.benchmarks.recall --dataset {{.DATASET | default "sift"}}
 
   bench:memory:
     desc: Memory usage benchmark
     aliases:
       - bench-memory
-    cmd: uv run python -m govec_bench.benchmarks.memory
+    cmd: uv run python -m govec_bench.benchmarks.memory --dataset {{.DATASET | default "sift"}}
 
   bench:coldstart:
     desc: Cold start benchmark

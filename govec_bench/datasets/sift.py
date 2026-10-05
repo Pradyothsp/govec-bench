@@ -1,20 +1,14 @@
 import struct
 from array import array
-from dataclasses import dataclass
 from pathlib import Path
 from typing import NamedTuple
 
-from govec_bench.adapters.base import InsertItem
+import numpy as np
+
+from govec_bench.datasets.base import ArrayItems, VectorDataset
 from govec_bench.types import NeighborIndices, Vector
 
 RAW_DIR = Path("data/raw")
-
-
-@dataclass(frozen=True, slots=True)
-class SiftDataset:
-    base: list[InsertItem]
-    queries: list[Vector]
-    groundtruth: list[NeighborIndices] | None
 
 
 class _RawVecsData(NamedTuple):
@@ -61,25 +55,25 @@ def read_ivecs(path: Path, limit: int | None = None) -> list[NeighborIndices]:
     return [values[i * stride + 1 : i * stride + 1 + dim].tolist() for i in range(record_count)]
 
 
-def load_sift10k() -> SiftDataset:
+def load_sift10k() -> VectorDataset:
     d = RAW_DIR / "siftsmall"
     base = read_fvecs(d / "siftsmall_base.fvecs")
 
-    return SiftDataset(
-        base=[InsertItem(id=f"sift10k_{i}", vector=v) for i, v in enumerate(base)],
+    # SIFT's shipped siftsmall_groundtruth.ivecs isn't loaded: it's Euclidean, and recall is
+    # graded against exact cosine neighbours instead (see datasets/groundtruth.py).
+    return VectorDataset(
+        name="sift10k",
+        base=ArrayItems("sift10k", np.asarray(base, dtype=np.float32)),
         queries=read_fvecs(d / "siftsmall_query.fvecs"),
-        groundtruth=read_ivecs(d / "siftsmall_groundtruth.ivecs"),
     )
 
 
-def load_sift100k() -> SiftDataset:
+def load_sift100k() -> VectorDataset:
     d = RAW_DIR / "sift"
     base = read_fvecs(d / "sift_base.fvecs", limit=100_000)
 
-    return SiftDataset(
-        base=[InsertItem(id=f"sift100k_{i}", vector=v) for i, v in enumerate(base)],
+    return VectorDataset(
+        name="sift100k",
+        base=ArrayItems("sift100k", np.asarray(base, dtype=np.float32)),
         queries=read_fvecs(d / "sift_query.fvecs"),
-        # sift_groundtruth.ivecs is computed against the full 1M-vector base set,
-        # not valid for this 100k slice -- SIFT100K is latency/memory only, no recall.
-        groundtruth=None,
     )

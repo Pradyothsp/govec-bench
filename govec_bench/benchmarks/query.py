@@ -5,7 +5,7 @@ from govec_bench.adapters.base import VectorDBAdapter
 from govec_bench.adapters.govec_adapter import GovecAdapter
 from govec_bench.adapters.registry import build_adapters
 from govec_bench.benchmarks.common import load_dataset
-from govec_bench.datasets.sift import load_sift10k
+from govec_bench.datasets.registry import dataset_from_args
 from govec_bench.results import LatencyStats, compute_latency_stats, write_results
 from govec_bench.types import Vector
 
@@ -23,7 +23,7 @@ def measure_query_latency(adapter: VectorDBAdapter, queries: list[Vector], k: in
 
 
 def main() -> None:
-    dataset = load_sift10k()
+    dataset = dataset_from_args().small()
     adapters = build_adapters()
     # Not in build_adapters() -- see insert.py/recall.py's identical comment:
     # a second govec variant to measure int8 scalar quantization's query cost
@@ -37,7 +37,7 @@ def main() -> None:
 
         results[name] = {f"k_{k}": asdict(measure_query_latency(adapter, dataset.queries, k)) for k in K_VALUES}
 
-    path = write_results(benchmark="query_latency", dataset="sift10k", results=results)
+    path = write_results(benchmark="query_latency", dataset=dataset.name, results=results)
     print(f"Wrote {path}")
 
 
