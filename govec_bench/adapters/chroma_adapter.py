@@ -2,7 +2,8 @@ from collections.abc import Mapping, Sequence
 from typing import override
 
 import chromadb
-from chromadb.api.types import Metadatas
+from chromadb.api.collection_configuration import HNSWConfiguration
+from chromadb.api.types import CollectionMetadata, Metadatas
 
 from govec_bench.adapters.base import InsertItem, QueryResult, Stats, VectorDBAdapter
 from govec_bench.types import Vector
@@ -22,9 +23,16 @@ def _to_str_metadata(meta: Mapping[str, object] | None) -> dict[str, str] | None
 class ChromaAdapter(VectorDBAdapter):
     def __init__(self, host: str = "localhost", port: int = 8001) -> None:
         self._client = chromadb.HttpClient(host=host, port=port)
-        self._collection = self._client.get_or_create_collection(
-            name=COLLECTION_NAME, metadata={"hnsw:space": "cosine"}
-        )
+        # None leaves ef_search at Chroma's default; recreate_with_search_ef() sets it.
+        self._search_ef: int | None = None
+        self._collection = self._client.get_or_create_collection(name=COLLECTION_NAME, metadata=self._metadata())
+
+    def _metadata(self) -> CollectionMetadata:
+        metadata: CollectionMetadata = {"hnsw:space": "cosine"}
+        if self._search_ef is not None:
+            metadata["hnsw:search_ef"] = self._search_ef
+
+        return metadata
 
     @override
     def insert(self, vector_id: str, vector: Vector, metadata: dict[str, str] | None = None) -> None:
@@ -66,9 +74,24 @@ class ChromaAdapter(VectorDBAdapter):
     def stats(self) -> Stats:
         return Stats(count=self._collection.count())
 
+    def recreate_with_search_ef(self, ef: int) -> None:
+        # Empties the collection and recreates it with this ef_search; load after calling. Set
+        # at creation because Chroma 1.4.4 accepts collection.modify(ef_search) and reports it
+        # applied, but queries keep the ef the collection was created with. Read back from the
+        # server rather than trusted, so a setting it drops can't pass silently.
+        self._search_ef = ef
+        self.reset()
+
+        applied = self.hnsw_configuration()
+        if applied.get("ef_search") != ef:
+            msg = f"Chroma kept hnsw configuration {applied} after setting ef_search={ef}"
+            raise RuntimeError(msg)
+
+    def hnsw_configuration(self) -> HNSWConfiguration:
+        # As the server reports it now, not as this client last set it.
+        return self._client.get_collection(COLLECTION_NAME).configuration.get("hnsw") or {}
+
     @override
     def reset(self) -> None:
         self._client.reset()
-        self._collection = self._client.get_or_create_collection(
-            name=COLLECTION_NAME, metadata={"hnsw:space": "cosine"}
-        )
+        self._collection = self._client.get_or_create_collection(name=COLLECTION_NAME, metadata=self._metadata())

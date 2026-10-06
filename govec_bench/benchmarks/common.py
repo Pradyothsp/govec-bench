@@ -4,6 +4,7 @@ import subprocess
 import time
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
+from pathlib import Path
 from typing import NamedTuple
 
 from govec_bench.adapters.base import VectorDBAdapter
@@ -14,6 +15,8 @@ from govec_bench.datasets.registry import DATASETS, DatasetSizes
 SETUP_BATCH_SIZE = 100
 
 DOCKER = shutil.which("docker")
+
+COMPOSE_FILE = Path("docker-compose.yml")
 
 POLL_INTERVAL_S = 0.05
 
@@ -26,7 +29,8 @@ class BenchArgs(NamedTuple):
     databases: dict[str, Database]
 
 
-def parse_args(argv: Sequence[str] | None = None) -> BenchArgs:
+def build_parser() -> argparse.ArgumentParser:
+    # The arguments every benchmark shares; a benchmark with its own adds them to this parser.
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", choices=sorted(DATASETS), default="sift")
     parser.add_argument(
@@ -35,9 +39,15 @@ def parse_args(argv: Sequence[str] | None = None) -> BenchArgs:
         choices=list(DATABASES),
         help="run only this database; repeat for several (default: all)",
     )
-    args = parser.parse_args(argv)
+    return parser
 
+
+def to_bench_args(args: argparse.Namespace) -> BenchArgs:
     return BenchArgs(dataset=DATASETS[args.dataset], databases=select_databases(args.db))
+
+
+def parse_args(argv: Sequence[str] | None = None) -> BenchArgs:
+    return to_bench_args(build_parser().parse_args(argv))
 
 
 def load_dataset(adapter: VectorDBAdapter, items: ArrayItems, batch_size: int = SETUP_BATCH_SIZE) -> None:
@@ -45,6 +55,8 @@ def load_dataset(adapter: VectorDBAdapter, items: ArrayItems, batch_size: int = 
     # Chroma) enforce a max batch size well below typical dataset sizes.
     for i in range(0, len(items), batch_size):
         adapter.batch_insert(items[i : i + batch_size])
+
+    adapter.wait_until_settled()
 
 
 def docker(*args: str) -> subprocess.CompletedProcess[str]:
@@ -88,13 +100,17 @@ def wait_until_queryable(build_adapter: Callable[[], VectorDBAdapter], timeout_s
 
 
 @contextmanager
-def running_alone(service: str, database: Database) -> Iterator[VectorDBAdapter]:
+def running_alone(service: str, database: Database, overrides: Sequence[Path] = ()) -> Iterator[VectorDBAdapter]:
     # Only the database under test runs. Idle neighbours still work in the background (Chroma
     # compacts, Qdrant optimizes, Go collects garbage) and hold their loaded data in the same
     # Docker VM; at 2 CPUs each, four containers claim every core of an 8-core laptop. Each
     # database starts from a fresh container and empty volumes, and leaves none behind.
+    # overrides are Compose files layered over docker-compose.yml for this start only, so a
+    # benchmark can change a service's settings without editing the published file.
+    files = [arg for path in (COMPOSE_FILE, *overrides) for arg in ("--file", str(path))] if overrides else []
+
     compose("down", "--volumes")
-    compose("up", "--detach", service)
+    compose(*files, "up", "--detach", service)
     try:
         wait_until_queryable(database.build_adapter, START_TIMEOUT_S)
 

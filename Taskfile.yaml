@@ -84,6 +84,12 @@ tasks:
       - bench-memory
     cmd: uv run python -m govec_bench.benchmarks.memory --dataset {{.DATASET | default "sift"}} {{.CLI_ARGS}}
 
+  bench:sweep:
+    desc: Recall against latency across search ef for govec, chroma and qdrant (not part of bench:all)
+    aliases:
+      - bench-sweep
+    cmd: uv run python -m govec_bench.benchmarks.ef_sweep --dataset {{.DATASET | default "sift"}} {{.CLI_ARGS}}
+
   bench:coldstart:
     desc: Cold start benchmark
     aliases:

@@ -24,6 +24,8 @@ several "GoVec wins" here have turned out to be measurement errors.
 | `task docker:up` / `task docker:down` | Start / stop all databases, for manual poking; benchmarks start their own |
 | `task bench:all` | Run all five benchmarks; each writes `results/<benchmark>_<timestamp>.json`. `DATASET=dbpedia` switches dataset |
 | `task bench:insert` (`query`, `recall`, `memory`, `coldstart`) | Run one benchmark; `-- --db govec --db qdrant` runs only those databases |
+| `task bench:sweep` | Recall@k against query latency per search ef (`-- --ef 50 --ef 100 --k 10` to narrow); GoVec, Chroma and Qdrant unless `--db` says otherwise (`--db govec-scalar` adds int8); not part of `bench:all` |
+| `COMPOSE_FILE=docker-compose.yml:compose.govec-efc200.yaml task bench:insert -- --db govec` | Any benchmark with GoVec built at `ef_construction=200` (its default up to 0.2.0) instead of 100 |
 | `task test` | Unit tests |
 | `task fmt` / `task fmt:check` | Format and autofix / ruff + ty + format check |
 | `task docker:clean` | Remove this project's containers, images and volumes |
@@ -97,6 +99,14 @@ govec-config*.yaml     GoVec's config for the float32 and int8 services
   recall@1, and understated every database by up to 2 points. `recall.py` now computes exact
   cosine neighbours by brute force (`datasets/groundtruth.py`). If you change a metric, change
   the key with it.
+- **A GoVec snapshot overrides the configured `ef_search` (up to 0.2.0; fixed after).** The snapshot stores the graph's
+  ef_search and loading it overwrites `GOVEC_HNSW_EF_SEARCH`/`hnsw_ef_search`, so restarting a
+  loaded container with a new ef searches with the old one. `ef_sweep.py` starts a fresh
+  container per ef instead, and checks the env reached it.
+- **Chroma ignores a changed `ef_search` on an existing collection.** On 1.4.4,
+  `collection.modify(configuration={"hnsw": {"ef_search": …}})` succeeds and the server reports
+  the new value, but queries keep the ef the collection was created with. Set it at creation
+  (`hnsw:search_ef`); `ef_sweep.py` uses a fresh collection per ef.
 - **Keep the SDK and the server image in step.** The govec adapter uses the published SDK. When
   you bump the `ghcr.io/pradyothsp/govec` pin, bump `govec>=…` in `pyproject.toml` with it: a
   new server behind an old pinned SDK once crashed the query benchmark mid-run.

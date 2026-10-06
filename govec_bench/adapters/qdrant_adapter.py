@@ -6,7 +6,15 @@ from typing import override
 import httpx
 from qdrant_client import QdrantClient
 from qdrant_client.http.exceptions import ResponseHandlingException
-from qdrant_client.models import Distance, HnswConfigDiff, OptimizersConfigDiff, PointStruct, VectorParams
+from qdrant_client.models import (
+    CollectionStatus,
+    Distance,
+    HnswConfigDiff,
+    OptimizersConfigDiff,
+    PointStruct,
+    SearchParams,
+    VectorParams,
+)
 
 from govec_bench.adapters.base import InsertItem, QueryResult, Stats, VectorDBAdapter
 from govec_bench.types import Vector
@@ -29,6 +37,9 @@ _INDEXING_POLL_INTERVAL_S = 0.05
 # DISK_STABILIZE_TIMEOUT_S (120s) already documents the same class of Qdrant
 # background-merge lag at this scale.
 _INDEXING_POLL_TIMEOUT_S = 120.0
+# The optimizer merges segments well after indexing catches up; at 100k vectors that outlasts the
+# indexing timeout.
+_SETTLE_TIMEOUT_S = 600.0
 
 # Qdrant point IDs must be a u64 or a UUID -- arbitrary strings like our
 # "sift10k_12345" IDs are rejected outright. Map deterministically into this
@@ -38,6 +49,11 @@ _INDEXING_POLL_TIMEOUT_S = 120.0
 # can hand back the ID callers actually asked for.
 _ID_NAMESPACE = uuid.UUID("6f6e0a4e-9c1a-4b8e-8f0a-000000000000")
 _ORIGINAL_ID_KEY = "_govec_bench_id"
+
+# Qdrant's own defaults, set explicitly so no result depends on a default changing between
+# releases: M=16 like every database here, and ef_construct=100 like Chroma's.
+HNSW_M = 16
+HNSW_EF_CONSTRUCT = 100
 
 
 def _to_point_id(vector_id: str) -> str:
@@ -56,6 +72,12 @@ class QdrantAdapter(VectorDBAdapter):
         # a real vector tells us the dimension. Avoids hardcoding a dataset's
         # dimension into the adapter or changing the VectorDBAdapter interface.
         self._collection_ready = False
+        # None searches with Qdrant's default ef (ef_construct); set_search_ef() overrides it.
+        self._search_params: SearchParams | None = None
+
+    def set_search_ef(self, ef: int) -> None:
+        # Qdrant takes ef per query, so a sweep can change it without rebuilding the graph.
+        self._search_params = SearchParams(hnsw_ef=ef)
 
     def _ensure_collection(self, dim: int) -> None:
         if self._collection_ready:
@@ -73,10 +95,14 @@ class QdrantAdapter(VectorDBAdapter):
                 # at Qdrant's stock defaults for a fresh SIFT10K load). Both
                 # thresholds forced low so Qdrant always builds and uses the
                 # real HNSW graph, matching the other two adapters --
-                # m/ef_construct are left at Qdrant's own defaults, only
-                # whether indexing happens at all is being forced here, not
-                # how it's tuned.
-                hnsw_config=HnswConfigDiff(full_scan_threshold=10),  # 10 is the API's minimum
+                # m/ef_construct stay at Qdrant's own defaults (written out
+                # as HNSW_M/HNSW_EF_CONSTRUCT); only whether indexing happens
+                # at all is being forced here, not how it's tuned.
+                hnsw_config=HnswConfigDiff(
+                    m=HNSW_M,
+                    ef_construct=HNSW_EF_CONSTRUCT,
+                    full_scan_threshold=10,  # 10 is the API's minimum
+                ),
                 # indexing_threshold=0 does NOT mean "always index" -- it means
                 # the opposite, disabling indexing entirely (verified against
                 # Qdrant's docs after an initial attempt at 0 silently built no
@@ -137,11 +163,30 @@ class QdrantAdapter(VectorDBAdapter):
         raise TimeoutError(msg)
 
     @override
+    def wait_until_settled(self) -> None:
+        # Indexed is not idle: the optimizer keeps merging segments after every vector is indexed,
+        # competing with queries for the container's 2 CPUs. Green means it has stopped. Not in
+        # batch_insert, so the insert benchmark's timings don't include it.
+        deadline = time.monotonic() + _SETTLE_TIMEOUT_S
+        while time.monotonic() < deadline:
+            try:
+                status = self._client.get_collection(COLLECTION_NAME).status
+            except ResponseHandlingException:
+                time.sleep(_INDEXING_POLL_INTERVAL_S)
+                continue
+            if status == CollectionStatus.GREEN:
+                return
+            time.sleep(_INDEXING_POLL_INTERVAL_S)
+        msg = f"Qdrant's optimizer did not finish within {_SETTLE_TIMEOUT_S}s"
+        raise TimeoutError(msg)
+
+    @override
     def query(self, vector: Vector, k: int = 10) -> list[QueryResult]:
         result = self._client.query_points(
             collection_name=COLLECTION_NAME,
             query=vector,
             limit=k,
+            search_params=self._search_params,
             with_payload=True,
         )
 

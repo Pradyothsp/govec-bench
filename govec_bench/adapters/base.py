@@ -40,3 +40,8 @@ class VectorDBAdapter(ABC):
 
     @abstractmethod
     def reset(self) -> None: ...
+
+    def wait_until_settled(self) -> None:
+        # Called once after a full load, before anything is measured against it. A database that
+        # keeps reorganizing data in the background after its inserts return waits for that here.
+        return
