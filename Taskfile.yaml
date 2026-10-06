@@ -23,7 +23,7 @@ tasks:
     desc: Download a dataset (DATASET=sift, the default, or dbpedia)
     aliases:
       - data-download
-    cmd: uv run python scripts/download_datasets.py --dataset {{.DATASET | default "sift"}}
+    cmd: uv run python -m scripts.download_datasets --dataset {{.DATASET | default "sift"}}
 
   docker:up:
     desc: Start the comparison vector DBs (Chroma, ...) via Docker Compose
