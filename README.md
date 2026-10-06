@@ -9,9 +9,9 @@ reproduce the numbers.
 
 > **Preliminary.** Single runs on October 6, 2026, on a laptop that wasn't kept idle. Directions
 > are clear; exact figures will move. These will be replaced by medians of repeated runs against
-> a published GoVec release. GoVec ran as the pinned 0.2.0 image or a build of its `main` branch
-> after it, both with the index settings this repo's `govec-config.yaml` sets. The earlier
-> SIFT-only results (GoVec 0.1.0, `ef_search=50`) are at harness tag
+> a published GoVec release. GoVec ran as the 0.2.0 image or a build of its `main` branch after
+> it (since released as 0.2.1), both with the index settings this repo's `govec-config.yaml`
+> sets. The earlier SIFT-only results (GoVec 0.1.0, `ef_search=50`) are at harness tag
 > [`v0.1.0`](https://github.com/Pradyothsp/govec-bench/tree/v0.1.0).
 
 On a MacBook (Apple Silicon) with Docker Desktop, one database at a time, 2 CPUs and 2 GB each.
@@ -144,7 +144,7 @@ Two datasets, chosen with `DATASET=sift` (the default) or `DATASET=dbpedia`:
 
 | Database | Image | Index |
 |---|---|---|
-| GoVec | `ghcr.io/pradyothsp/govec:0.2.0` | HNSW, `M=16`, `ef_construction=100`, `ef_search=100`, cosine (set in `govec-config.yaml`) |
+| GoVec | `ghcr.io/pradyothsp/govec:0.2.1` | HNSW, `M=16`, `ef_construction=100`, `ef_search=100`, cosine (set in `govec-config.yaml`) |
 | GoVec (int8) | the same, with `quantization: scalar` | as above, vectors stored as int8 |
 | Chroma | Chroma 1.4.4, pinned by digest | HNSW, its defaults (`M=16`, `ef_construction=100`, `ef_search=100`), cosine |
 | Qdrant | `qdrant/qdrant:v1.19.0` | HNSW, its defaults (`m=16`, `ef_construct=100`; search ef defaults to it), cosine |
