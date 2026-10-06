@@ -1,12 +1,9 @@
 from dataclasses import asdict
 
 from govec_bench.adapters.base import VectorDBAdapter
-from govec_bench.adapters.govec_adapter import GovecAdapter
-from govec_bench.adapters.registry import build_adapters
-from govec_bench.benchmarks.common import load_dataset
+from govec_bench.benchmarks.common import load_dataset, parse_args, running_alone
 from govec_bench.datasets.base import ArrayItems
 from govec_bench.datasets.groundtruth import exact_cosine_neighbors
-from govec_bench.datasets.registry import dataset_from_args
 from govec_bench.results import RecallStats, compute_recall_stats, write_results
 from govec_bench.types import NeighborIndices, Vector
 
@@ -37,25 +34,20 @@ def measure_recall(
 
 
 def main() -> None:
-    dataset = dataset_from_args().small()
+    args = parse_args()
+    dataset = args.dataset.small()
     groundtruth = exact_cosine_neighbors(dataset.base.vectors, dataset.queries, max(K_VALUES))
 
-    adapters = build_adapters()
-    # Not in build_adapters() -- that dict is shared with insert.py/query.py,
-    # which have no use for a second govec variant. Scoped to this benchmark
-    # only, to measure the accuracy cost of int8 scalar quantization
-    # (govec-config-scalar.yaml, the govec-scalar service on port 9699)
-    # against the RAM/disk win already measured in memory.py.
-    adapters["govec-scalar"] = GovecAdapter(port=9699)
-
     results: dict[str, object] = {}
-    for name, adapter in adapters.items():
-        adapter.reset()
-        load_dataset(adapter, dataset.base)
+    for name, database in args.databases.items():
+        print(f"Measuring recall: {name}...")
+        with running_alone(name, database) as adapter:
+            load_dataset(adapter, dataset.base)
 
-        results[name] = {
-            f"k_{k}": asdict(measure_recall(adapter, dataset.base, dataset.queries, groundtruth, k)) for k in K_VALUES
-        }
+            results[name] = {
+                f"k_{k}": asdict(measure_recall(adapter, dataset.base, dataset.queries, groundtruth, k))
+                for k in K_VALUES
+            }
 
     path = write_results(benchmark="recall", dataset=dataset.name, results=results)
     print(f"Wrote {path}")

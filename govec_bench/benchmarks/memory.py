@@ -1,22 +1,12 @@
 import time
-from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from functools import partial
 from typing import NamedTuple
 
-from govec_bench.adapters.base import VectorDBAdapter
-from govec_bench.adapters.chroma_adapter import ChromaAdapter
 from govec_bench.adapters.govec_adapter import GovecAdapter
-from govec_bench.adapters.qdrant_adapter import QdrantAdapter
-from govec_bench.benchmarks.common import compose, docker, load_dataset, wait_until_queryable
-from govec_bench.datasets.registry import dataset_from_args
+from govec_bench.benchmarks.common import container_of, docker, load_dataset, parse_args, running_alone
 from govec_bench.results import write_results
 
-# Generous: this waits out a full container recreation (docker compose down
-# -v && up -d), not just a process restart like cold_start.py's POLL_TIMEOUT_S.
-POLL_TIMEOUT_S = 120
-
-# RAM checkpoints, seconds after both loads finish. Not a single "settled"
+# RAM checkpoints, seconds after the load finishes. Not a single "settled"
 # snapshot: govec's RSS drops sharply over the first few minutes post-load as
 # Go's scavenger returns freed pages to the OS -- a
 # one-shot measurement just encodes whatever moment you happened to sample.
@@ -27,21 +17,6 @@ POLL_TIMEOUT_S = 120
 # timing-independent figure is #14's pprof inuse_space (live heap).
 RAM_SAMPLE_DELAYS_S = (0, 60)
 
-GOVEC_CONTAINER = "govec-bench-govec"
-GOVEC_DISK_PATHS = ("/data/govec_data.bin", "/data/govec.wal")
-GOVEC_SCALAR_CONTAINER = "govec-bench-govec-scalar"
-CHROMA_CONTAINER = "govec-bench-chroma"
-CHROMA_DISK_PATHS = ("/data",)
-QDRANT_CONTAINER = "govec-bench-qdrant"
-QDRANT_DISK_PATHS = ("/qdrant/storage",)
-
-# name -> (adapter constructor, container name, on-disk paths to measure)
-DBS: dict[str, tuple[Callable[[], VectorDBAdapter], str, tuple[str, ...]]] = {
-    "govec": (GovecAdapter, GOVEC_CONTAINER, GOVEC_DISK_PATHS),
-    "govec-scalar": (partial(GovecAdapter, port=9699), GOVEC_SCALAR_CONTAINER, GOVEC_DISK_PATHS),
-    "chroma": (ChromaAdapter, CHROMA_CONTAINER, CHROMA_DISK_PATHS),
-    "qdrant": (QdrantAdapter, QDRANT_CONTAINER, QDRANT_DISK_PATHS),
-}
 
 _SIZE_UNITS = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3, "TiB": 1024**4}
 
@@ -119,17 +94,14 @@ def _measure(container: str, disk_paths: tuple[str, ...]) -> FootprintStats:
     return FootprintStats(disk_bytes=_stable_du_bytes(container, disk_paths), ram_bytes=_ram_bytes(container))
 
 
-def _ram_series(containers: dict[str, str]) -> dict[str, list[RamSample]]:
-    # Sampled in the same pass for every DB at each checkpoint, so all DBs
-    # share one wall-clock timeline instead of paying the wait once per DB.
-    series: dict[str, list[RamSample]] = {name: [] for name in containers}
+def _ram_series(container: str) -> list[RamSample]:
+    series: list[RamSample] = []
     start = time.monotonic()
     for delay in RAM_SAMPLE_DELAYS_S:
         wait = delay - (time.monotonic() - start)
         if wait > 0:
             time.sleep(wait)
-        for name, container in containers.items():
-            series[name].append(RamSample(t_s=delay, ram_bytes=_ram_bytes(container)))
+        series.append(RamSample(t_s=delay, ram_bytes=_ram_bytes(container)))
     return series
 
 
@@ -154,39 +126,30 @@ def _result_to_json(result: MemoryResult) -> dict[str, object]:
 
 
 def main() -> None:
-    # Fresh containers + a fresh named volume: repeated benchmark runs today
-    # left Chroma's /data at 382MB of orphaned collection directories from
-    # past reset() calls, which chromadb's own reset() doesn't clean up on
-    # disk. A stale volume would make the disk numbers meaningless.
-    print("Resetting containers to a clean state (docker compose down -v && up -d)...")
-    compose("down", "-v")
-    compose("up", "-d")
+    args = parse_args()
+    dataset = args.dataset.large()
 
-    print("Waiting for containers to become queryable...")
-    adapters: dict[str, VectorDBAdapter] = {}
-    for name, (adapter_cls, _container, _paths) in DBS.items():
-        wait_until_queryable(adapter_cls, POLL_TIMEOUT_S)
-        adapters[name] = adapter_cls()
+    results: dict[str, object] = {}
+    for name, database in args.databases.items():
+        # running_alone() starts each database on empty volumes: Chroma's own reset() leaves
+        # orphaned collection directories on disk (382MB of them once), so a reused volume would
+        # make the disk numbers meaningless.
+        with running_alone(name, database) as adapter:
+            container = container_of(name)
+            baseline = _measure(container, database.disk_paths)
 
-    baselines = {name: _measure(container, paths) for name, (_cls, container, paths) in DBS.items()}
+            print(f"Loading {len(dataset.base)} vectors into {name}...")
+            load_dataset(adapter, dataset.base)
+            if isinstance(adapter, GovecAdapter):
+                adapter.flush()  # compact the WAL into the on-disk snapshot before measuring
 
-    dataset = dataset_from_args().large()
+            print("Waiting for the on-disk footprint to stabilize (background segment merges/vacuums)...")
+            disk_after = _stable_du_bytes(container, database.disk_paths)
 
-    for name, adapter in adapters.items():
-        print(f"Loading {len(dataset.base)} vectors into {name}...")
-        load_dataset(adapter, dataset.base)
-        if isinstance(adapter, GovecAdapter):
-            adapter.flush()  # compact the WAL into the on-disk snapshot before measuring
+            print(f"Sampling RAM at t={RAM_SAMPLE_DELAYS_S}s after load...")
+            ram_series = _ram_series(container)
 
-    print("Waiting for on-disk footprint to stabilize (background segment merges/vacuums)...")
-    disk_after = {name: _stable_du_bytes(container, paths) for name, (_cls, container, paths) in DBS.items()}
-
-    print(f"Sampling RAM at t={RAM_SAMPLE_DELAYS_S}s after load...")
-    ram_series = _ram_series({name: container for name, (_cls, container, _paths) in DBS.items()})
-
-    results: dict[str, object] = {
-        name: _result_to_json(_build_result(baselines[name], disk_after[name], ram_series[name])) for name in DBS
-    }
+        results[name] = _result_to_json(_build_result(baseline, disk_after, ram_series))
 
     path = write_results(benchmark="memory", dataset=dataset.name, results=results)
     print(f"Wrote {path}")

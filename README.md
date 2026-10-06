@@ -79,14 +79,13 @@ cd govec-bench
 uv sync --all-groups
 
 task data:download     # SIFT10K and SIFT1M into data/raw/
-task docker:up         # GoVec, GoVec int8, Chroma and Qdrant
-task bench:all         # all five benchmarks, about 15 minutes
-task docker:down
+task bench:all         # all five benchmarks; each starts one database at a time
 ```
 
 Each benchmark writes `results/<benchmark>_<timestamp>.json`, with one section per database.
 Run single benchmarks with `task bench:insert`, `bench:query`, `bench:recall`, `bench:memory` or
 `bench:coldstart`.
+Add `-- --db govec --db chroma` to run only some databases.
 
 ## Run-to-run variation
 

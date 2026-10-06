@@ -1,4 +1,3 @@
-import argparse
 from collections.abc import Callable
 from typing import NamedTuple
 
@@ -18,10 +17,3 @@ DATASETS: dict[str, DatasetSizes] = {
     # 1536-dimensional OpenAI text embeddings: what a RAG system actually stores.
     "dbpedia": DatasetSizes(small=load_dbpedia10k, large=load_dbpedia100k),
 }
-
-
-def dataset_from_args() -> DatasetSizes:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", choices=sorted(DATASETS), default="sift")
-
-    return DATASETS[parser.parse_args().dataset]

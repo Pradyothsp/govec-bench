@@ -21,9 +21,9 @@ several "GoVec wins" here have turned out to be measurement errors.
 |---|---|
 | `uv sync --all-groups` | Set up the environment |
 | `task data:download` | Fetch SIFT10K and SIFT1M (SIFT100K is its first 100k vectors); `DATASET=dbpedia` for the text embeddings |
-| `task docker:up` / `task docker:down` | Start / stop all databases |
+| `task docker:up` / `task docker:down` | Start / stop all databases, for manual poking; benchmarks start their own |
 | `task bench:all` | Run all five benchmarks; each writes `results/<benchmark>_<timestamp>.json`. `DATASET=dbpedia` switches dataset |
-| `task bench:insert` (`query`, `recall`, `memory`, `coldstart`) | Run one benchmark |
+| `task bench:insert` (`query`, `recall`, `memory`, `coldstart`) | Run one benchmark; `-- --db govec --db qdrant` runs only those databases |
 | `task test` | Unit tests |
 | `task fmt` / `task fmt:check` | Format and autofix / ruff + ty + format check |
 | `task docker:clean` | Remove this project's containers, images and volumes |
@@ -37,8 +37,9 @@ govec_bench/
     govec_adapter.py   via the govec SDK from PyPI, REST transport
     chroma_adapter.py  via chromadb's HTTP client, cosine space
     qdrant_adapter.py  via qdrant-client, cosine distance, keep-alive forced on
-    registry.py        build_adapters(): the databases every benchmark iterates
-  benchmarks/          one script per benchmark; common.py has dataset loading and docker helpers
+    registry.py        DATABASES: the one list of databases, by compose service: adapter, disk paths
+  benchmarks/          one script per benchmark; common.py has arguments, dataset loading, docker helpers
+                       and running_alone(), which runs one database's container at a time
   datasets/
     base.py            VectorDataset; ArrayItems keeps vectors in one array, builds items on read
     sift.py            fvecs/ivecs readers; SIFT10K and SIFT100K (128-dim image descriptors)
@@ -57,6 +58,9 @@ govec-config*.yaml     GoVec's config for the float32 and int8 services
   or `:latest`: results must be reproducible by anyone, and comparable between runs. Bump a pin
   deliberately and re-run everything.
 - **Identical resource caps.** Every service gets 2 CPUs and 2 GB.
+- **One database at a time.** Every benchmark starts only the container it measures, on fresh
+  volumes, and removes it afterwards (`running_alone()`). Idle neighbours still compact,
+  optimize and collect garbage, and four 2-CPU containers claim every core of an 8-core laptop.
 - **Stock settings unless the comparison needs otherwise.** HNSW parameters are matched where
   they're comparable (`M=16`, cosine). Anything tuned for one database only (e.g. `GOMEMLIMIT`
   for GoVec) stays off, with a comment saying why.
@@ -67,10 +71,10 @@ govec-config*.yaml     GoVec's config for the float32 and int8 services
 
 ## Adding a database
 
-1. An adapter in `adapters/`, implementing `VectorDBAdapter`, registered in `registry.py`.
+1. An adapter in `adapters/`, implementing `VectorDBAdapter`.
 2. A service in `docker-compose.yml`: pinned image, the same caps, a health check if possible.
-3. Its container name and data paths in `benchmarks/memory.py` (`DBS`) and its service in
-   `benchmarks/cold_start.py`.
+3. An entry in `adapters/registry.py` (`DATABASES`), keyed by that service's name: its adapter
+   and the data paths the memory benchmark measures. Every benchmark picks it up from there.
 4. Run the full suite, and check its numbers are plausible before trusting them.
 
 ## Measurement traps (found the hard way)
@@ -101,5 +105,5 @@ govec-config*.yaml     GoVec's config for the float32 and int8 services
 
 1. `task fmt && task fmt:check`.
 2. `task test`.
-3. If you changed an adapter or a benchmark, run it against `task docker:up` and sanity-check
-   the numbers against the previous results.
+3. If you changed an adapter or a benchmark, run it and sanity-check the numbers against the
+   previous results.

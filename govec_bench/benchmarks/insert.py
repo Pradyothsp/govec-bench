@@ -2,10 +2,8 @@ import time
 from dataclasses import asdict
 
 from govec_bench.adapters.base import VectorDBAdapter
-from govec_bench.adapters.govec_adapter import GovecAdapter
-from govec_bench.adapters.registry import build_adapters
+from govec_bench.benchmarks.common import parse_args, running_alone
 from govec_bench.datasets.base import ArrayItems
-from govec_bench.datasets.registry import dataset_from_args
 from govec_bench.results import LatencyStats, compute_latency_stats, write_results
 
 BATCH_SIZE = 100
@@ -38,22 +36,17 @@ def measure_batch_insert(adapter: VectorDBAdapter, items: ArrayItems, batch_size
 
 
 def main() -> None:
-    dataset = dataset_from_args().small()
-    adapters = build_adapters()
-    # Not in build_adapters() -- that dict is shared with query.py, which has
-    # no use for a second govec variant. Scoped to this benchmark only,
-    # following recall.py's existing pattern, to measure whether int8 scalar
-    # quantization (govec-config-scalar.yaml, the govec-scalar service on
-    # port 9699) costs anything on insert latency.
-    adapters["govec-scalar"] = GovecAdapter(port=9699)
+    args = parse_args()
+    dataset = args.dataset.small()
 
     results: dict[str, object] = {}
-    for name, adapter in adapters.items():
-        adapter.reset()
-        single_stats = measure_single_insert(adapter, dataset.base)
+    for name, database in args.databases.items():
+        print(f"Measuring insert latency: {name}...")
+        with running_alone(name, database) as adapter:
+            single_stats = measure_single_insert(adapter, dataset.base)
 
-        adapter.reset()
-        batch_stats = measure_batch_insert(adapter, dataset.base, BATCH_SIZE)
+            adapter.reset()
+            batch_stats = measure_batch_insert(adapter, dataset.base, BATCH_SIZE)
 
         results[name] = {
             "single": asdict(single_stats),

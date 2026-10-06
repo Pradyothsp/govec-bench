@@ -50,7 +50,7 @@ tasks:
     cmd: ./scripts/docker_cleanup.sh
 
   bench:all:
-    desc: Run all benchmarks (DATASET=sift, the default, or dbpedia)
+    desc: Run all benchmarks (DATASET=sift, the default, or dbpedia); each starts its own containers
     aliases:
       - bench
     cmds:
@@ -64,28 +64,28 @@ tasks:
     desc: Insert latency benchmark
     aliases:
       - bench-insert
-    cmd: uv run python -m govec_bench.benchmarks.insert --dataset {{.DATASET | default "sift"}}
+    cmd: uv run python -m govec_bench.benchmarks.insert --dataset {{.DATASET | default "sift"}} {{.CLI_ARGS}}
 
   bench:query:
     desc: Query latency benchmark
     aliases:
       - bench-query
-    cmd: uv run python -m govec_bench.benchmarks.query --dataset {{.DATASET | default "sift"}}
+    cmd: uv run python -m govec_bench.benchmarks.query --dataset {{.DATASET | default "sift"}} {{.CLI_ARGS}}
 
   bench:recall:
     desc: Recall@k benchmark
     aliases:
       - bench-recall
-    cmd: uv run python -m govec_bench.benchmarks.recall --dataset {{.DATASET | default "sift"}}
+    cmd: uv run python -m govec_bench.benchmarks.recall --dataset {{.DATASET | default "sift"}} {{.CLI_ARGS}}
 
   bench:memory:
     desc: Memory usage benchmark
     aliases:
       - bench-memory
-    cmd: uv run python -m govec_bench.benchmarks.memory --dataset {{.DATASET | default "sift"}}
+    cmd: uv run python -m govec_bench.benchmarks.memory --dataset {{.DATASET | default "sift"}} {{.CLI_ARGS}}
 
   bench:coldstart:
     desc: Cold start benchmark
     aliases:
       - bench-coldstart
-    cmd: uv run python -m govec_bench.benchmarks.cold_start
+    cmd: uv run python -m govec_bench.benchmarks.cold_start {{.CLI_ARGS}}
