@@ -441,16 +441,16 @@ wheels = [
 
 [[package]]
 name = "govec"
-version = "0.1.1"
+version = "0.1.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "grpcio" },
     { name = "httpx" },
     { name = "protobuf" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9b/dc/be3888607cc9d63d8e578a2979a2e6b49d85b07ef213ad010c197df104ad/govec-0.1.1.tar.gz", hash = "sha256:08bd537bc1dff5d386314454e28a28729cc3bf571e5a445b1e03e3342a3860e0", size = 23906, upload-time = "2026-10-04T00:29:16.44Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b8/d5/b2d7455b348f6cd9e575f1d745576473d10137f9365b49c4ff58472fa9d8/govec-0.1.2.tar.gz", hash = "sha256:b8d217a47536a8d327ae604ad50b98875e8cb41665fb1cb4353d696ed896ce25", size = 23984, upload-time = "2026-10-06T03:14:26.153Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/84/bf/a26f405fbb6d63dcfd9c8ea2a841dfc6f3dab7f6ada59c81193f4830ce33/govec-0.1.1-py3-none-any.whl", hash = "sha256:4b3c16864344a1d200f83aea799e296367ca22166819128bc3798611cbbc9f0b", size = 28476, upload-time = "2026-10-04T00:29:14.975Z" },
+    { url = "https://files.pythonhosted.org/packages/e4/41/71958398e2201a823c9baa08faf739a50fa19650b76086a47fc4fbdd79b1/govec-0.1.2-py3-none-any.whl", hash = "sha256:a981ef43bb05a43443bdc776895eec407f7c09e49956e90de776dd0d1c7cce2c", size = 28573, upload-time = "2026-10-06T03:14:24.973Z" },
 ]
 
 [[package]]
@@ -478,7 +478,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "chromadb", specifier = ">=1.5.9" },
-    { name = "govec", specifier = ">=0.1.1" },
+    { name = "govec", specifier = ">=0.1.2" },
     { name = "numpy", specifier = ">=2.0" },
     { name = "pyarrow", specifier = ">=25.0.1" },
     { name = "qdrant-client", specifier = ">=1.12.0" },

@@ -24,8 +24,8 @@ engine:
   enable_hybrid_search: true
   enable_metadata_index: false
   hnsw_m: 16 # matches Chroma's and Qdrant's defaults; earlier M=48 and M=24 tunings bought no recall for the extra memory
-  hnsw_ef_search: 50 # raised from 20 -- buys back recall without costing anything at k=50, since resultCap=max(k,efSearch) is already 50 there regardless
-  hnsw_ef_construction: 200 # govec's own factory default; M=16 needs a narrower candidate pool than M=24 did to reach the same recall
+  hnsw_ef_search: 100 # Chroma's and Qdrant's default, and GoVec's after 0.2.0. On DBpedia, ef 50 gave 0.973 recall@10, ef 100 0.995
+  hnsw_ef_construction: 100 # Chroma's, Qdrant's and GoVec's default after 0.2.0 (200 before). 200 added no recall from ef 100 up and cost 21-35% on batch insert
 
 grpc:
   enabled: false # not used by the benchmark adapters; disabled to keep the container's footprint minimal

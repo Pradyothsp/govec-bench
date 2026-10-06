@@ -2,7 +2,7 @@
 # versions behind the published numbers. Bump a pin deliberately, and re-run everything after.
 services:
   govec:
-    image: ghcr.io/pradyothsp/govec:0.1.0
+    image: ghcr.io/pradyothsp/govec:0.2.0
     container_name: govec-bench-govec
     ports:
       - "9697:9697"
@@ -25,7 +25,7 @@ services:
           memory: 2G
 
   govec-scalar:
-    image: ghcr.io/pradyothsp/govec:0.1.0
+    image: ghcr.io/pradyothsp/govec:0.2.0
     container_name: govec-bench-govec-scalar
     ports:
       - "9699:9697"

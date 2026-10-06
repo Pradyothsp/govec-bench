@@ -1,0 +1,11 @@
+# Layer over docker-compose.yml to build GoVec at ef_construction=200 (its default up to 0.2.0)
+# instead of 100, for comparing insert cost:
+#   COMPOSE_FILE=docker-compose.yml:compose.govec-efc200.yaml task bench:insert -- --db govec
+# The env var overrides hnsw_ef_construction in govec-config*.yaml.
+services:
+  govec:
+    environment:
+      GOVEC_HNSW_EF_CONSTRUCTION: "200"
+  govec-scalar:
+    environment:
+      GOVEC_HNSW_EF_CONSTRUCTION: "200"

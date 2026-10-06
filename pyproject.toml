@@ -10,7 +10,7 @@ requires-python = ">=3.14"
 dependencies = [
     "chromadb>=1.5.9",
     "qdrant-client>=1.12.0",
-    "govec>=0.1.1",
+    "govec>=0.1.2",
     "numpy>=2.0",
     "pyarrow>=25.0.1",
 ]
