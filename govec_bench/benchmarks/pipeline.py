@@ -33,6 +33,7 @@ from govec_bench.benchmarks.common import (
     build_parser,
     compose,
     container_of,
+    require_free_disk,
     running_alone,
     to_bench_args,
 )
@@ -327,6 +328,8 @@ def result_to_json(result: Record, error: str | None = None) -> dict[str, object
 
 def main() -> None:
     args = parse_pipeline_args()
+    if args.size == "large":
+        require_free_disk()
     dataset = load_sized(args.bench.dataset, args.size)
     workload = Workload(
         base=dataset.base,

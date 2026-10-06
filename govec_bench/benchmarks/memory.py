@@ -3,7 +3,14 @@ from dataclasses import asdict, dataclass
 from typing import NamedTuple
 
 from govec_bench.adapters.govec_adapter import GovecAdapter
-from govec_bench.benchmarks.common import container_of, docker, load_dataset, parse_args, running_alone
+from govec_bench.benchmarks.common import (
+    container_of,
+    docker,
+    load_dataset,
+    parse_args,
+    require_free_disk,
+    running_alone,
+)
 from govec_bench.results import write_results
 
 # RAM checkpoints, seconds after the load finishes. Not a single "settled"
@@ -196,6 +203,7 @@ def memory_result_to_json(result: MemoryResult) -> dict[str, object]:
 
 def main() -> None:
     args = parse_args()
+    require_free_disk()
     dataset = args.dataset.large()
 
     results: dict[str, object] = {}

@@ -8,6 +8,7 @@ from govec_bench.benchmarks.common import (
     add_size_argument,
     build_parser,
     load_dataset,
+    require_free_disk,
     running_alone,
     to_bench_args,
 )
@@ -58,6 +59,8 @@ def measure_recall(
 
 def main() -> None:
     args = parse_recall_args()
+    if args.size == "large":
+        require_free_disk()
     dataset = load_sized(args.bench.dataset, args.size)
     groundtruth = exact_cosine_neighbors(dataset.base.vectors, dataset.queries, max(K_VALUES))
 

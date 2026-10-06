@@ -122,6 +122,10 @@ govec-config*.yaml     GoVec's config for the float32 and int8 services
   likely Qdrant) lives in the file cache, not the process. The benchmarks record the cgroup's
   process/file-cache breakdown next to the `docker stats` figure, so a "smaller" number can be
   told apart from memory that moved.
+- **Qdrant needs tens of GB of temporary disk at 100k.** While it optimizes a 100k load of
+  1536-d vectors it has written about 30 GB, though it settles under 1 GB. 100k runs (memory
+  benchmark, `--size large`) check first for 35 GB free, inside Docker's disk and, on Docker
+  Desktop, on the Mac's disk it grows into, and stop with the reason otherwise.
 - **Keep the SDK and the server image in step.** The govec adapter uses the published SDK. When
   you bump the `ghcr.io/pradyothsp/govec` pin, bump `govec>=…` in `pyproject.toml` with it: a
   new server behind an old pinned SDK once crashed the query benchmark mid-run.

@@ -25,6 +25,21 @@ POLL_INTERVAL_S = 0.05
 # Generous: a fresh container, not a restart, so the image's first start is inside the wait.
 START_TIMEOUT_S = 120
 
+# Qdrant writes tens of GB of temporary files while it optimizes a 100k load of 1536-d vectors
+# (about 30 GB seen). Below this a 100k run can fail partway, after its longest loads.
+MIN_FREE_DISK_BYTES = 35 * 1000**3
+
+# Docker Desktop's virtual disk is a sparse file that grows into the Mac's own free space.
+DOCKER_DESKTOP_DISK_DIR = Path.home() / "Library/Containers/com.docker.docker/Data/vms/0/data"
+
+# Any service will do for reading Docker's disk: it only runs df in a throwaway container.
+DISK_PROBE_SERVICE = "govec"
+
+
+class FreeSpace(NamedTuple):
+    where: str
+    free_bytes: int
+
 
 class BenchArgs(NamedTuple):
     dataset: DatasetSizes
@@ -79,6 +94,40 @@ def docker(*args: str) -> subprocess.CompletedProcess[str]:
 
 def compose(*args: str) -> None:
     docker("compose", *args)
+
+
+def parse_df_available(output: str) -> int:
+    # `df -Pk` (POSIX layout): a header line, then one line per filesystem; field 4 is the
+    # available space in 1 KiB blocks.
+    return int(output.strip().splitlines()[-1].split()[3]) * 1024
+
+
+def free_space() -> list[FreeSpace]:
+    # Inside Docker's disk is where the volumes live, so that's what fills up; on Docker Desktop
+    # it's a virtual disk with its own size limit, separate from the Mac's free space.
+    output = docker("compose", "run", "--rm", "--no-deps", "--entrypoint", "df", DISK_PROBE_SERVICE, "-Pk", "/")
+    spaces = [FreeSpace("Docker's disk", parse_df_available(output.stdout))]
+
+    if DOCKER_DESKTOP_DISK_DIR.exists():
+        spaces.append(
+            FreeSpace("the Mac's disk, which Docker's grows into", shutil.disk_usage(DOCKER_DESKTOP_DISK_DIR).free)
+        )
+
+    return spaces
+
+
+def shortfalls(spaces: Sequence[FreeSpace], min_bytes: int) -> list[FreeSpace]:
+    return [space for space in spaces if space.free_bytes < min_bytes]
+
+
+def require_free_disk(min_bytes: int = MIN_FREE_DISK_BYTES) -> None:
+    # Checked before a 100k run starts, so a full disk stops it with a reason instead of failing
+    # an hour in, partway through a database.
+    short = shortfalls(free_space(), min_bytes)
+    if short:
+        details = "; ".join(f"{space.where} has {space.free_bytes / 1000**3:.1f} GB free" for space in short)
+        msg = f"need at least {min_bytes / 1000**3:.0f} GB free for a 100k run: {details}"
+        raise SystemExit(msg)
 
 
 def container_of(service: str) -> str:
