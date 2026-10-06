@@ -24,6 +24,7 @@ several "GoVec wins" here have turned out to be measurement errors.
 | `task docker:up` / `task docker:down` | Start / stop all databases, for manual poking; benchmarks start their own |
 | `task bench:all` | Run all five benchmarks; each writes `results/<benchmark>_<timestamp>.json`. `DATASET=dbpedia` switches dataset |
 | `task bench:insert` (`query`, `recall`, `memory`, `coldstart`) | Run one benchmark; `-- --db govec --db qdrant` runs only those databases |
+| `task bench:pipeline` | Every benchmark from one load per database: batch insert, disk and RAM, recall and query latency, restarts with data and empty, single inserts on 10k. `SIZE=large` for 100k |
 | `task bench:sweep` | Recall@k against query latency per search ef (`-- --ef 50 --ef 100 --k 10` to narrow); GoVec, Chroma and Qdrant unless `--db` says otherwise (`--db govec-scalar` adds int8); not part of `bench:all` |
 | `COMPOSE_FILE=docker-compose.yml:compose.govec-efc200.yaml task bench:insert -- --db govec` | Any benchmark with GoVec built at `ef_construction=200` (its default up to 0.2.0) instead of 100 |
 | `task test` | Unit tests |
@@ -39,14 +40,16 @@ govec_bench/
     govec_adapter.py   via the govec SDK from PyPI, REST transport
     chroma_adapter.py  via chromadb's HTTP client, cosine space
     qdrant_adapter.py  via qdrant-client, cosine distance, keep-alive forced on
-    registry.py        DATABASES: the one list of databases, by compose service: adapter, disk paths
+    registry.py        DATABASES: the one list of databases, by compose service: adapter, disk paths,
+                       whether it needs the dimension at startup, whether it's opt-in (govec-mmap)
   benchmarks/          one script per benchmark; common.py has arguments, dataset loading, docker helpers
+                       pipeline.py runs them all from one load: PIPELINE is a list of stages of steps
                        and running_alone(), which runs one database's container at a time
   datasets/
     base.py            VectorDataset; ArrayItems keeps vectors in one array, builds items on read
     sift.py            fvecs/ivecs readers; SIFT10K and SIFT100K (128-dim image descriptors)
     dbpedia.py         DBpedia 10k/100k: OpenAI ada-002 text embeddings, 1536-dim, from Parquet
-    registry.py        --dataset name -> (10k loader, 100k loader)
+    registry.py        --dataset name -> (10k loader, 100k loader, dimensions); Size and load_sized()
     groundtruth.py     exact cosine neighbours by brute force: the recall answer key
   results.py           latency/recall statistics and the JSON results writer
 docker-compose.yml     the databases, pinned images, 2 CPU / 2 GB each
@@ -107,6 +110,18 @@ govec-config*.yaml     GoVec's config for the float32 and int8 services
   `collection.modify(configuration={"hnsw": {"ef_search": …}})` succeeds and the server reports
   the new value, but queries keep the ef the collection was created with. Set it at creation
   (`hnsw:search_ef`); `ef_sweep.py` uses a fresh collection per ef.
+- **Qdrant sometimes misses one query entirely.** In about 1 SIFT build in 11, Qdrant's graph
+  search at its default ef returns none of one query's true neighbours, the same on every repeat;
+  the vectors are stored, and exact search or ef 400 finds them. Seen at DBpedia 100k too. Real
+  Qdrant behaviour, not the harness: report worst-query recall and medians across builds, and
+  don't "fix" it by retrying.
+- **Apparent disk size overstates sparse files.** GoVec's mmap chunks are created at 1 GiB and
+  filled as vectors arrive, so `du -b` reports 1 GiB at 10k vectors. The memory benchmark records
+  allocated blocks (`du -k`) too; use those.
+- **`docker stats` counts file cache only while it's active.** Memory-mapped data (GoVec mmap,
+  likely Qdrant) lives in the file cache, not the process. The benchmarks record the cgroup's
+  process/file-cache breakdown next to the `docker stats` figure, so a "smaller" number can be
+  told apart from memory that moved.
 - **Keep the SDK and the server image in step.** The govec adapter uses the published SDK. When
   you bump the `ghcr.io/pradyothsp/govec` pin, bump `govec>=…` in `pyproject.toml` with it: a
   new server behind an old pinned SDK once crashed the query benchmark mid-run.

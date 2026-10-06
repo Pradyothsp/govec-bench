@@ -1,6 +1,8 @@
 import argparse
+import json
 import shutil
 import subprocess
+import tempfile
 import time
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
@@ -10,7 +12,7 @@ from typing import NamedTuple
 from govec_bench.adapters.base import VectorDBAdapter
 from govec_bench.adapters.registry import DATABASES, Database, select_databases
 from govec_bench.datasets.base import ArrayItems
-from govec_bench.datasets.registry import DATASETS, DatasetSizes
+from govec_bench.datasets.registry import DATASETS, SIZES, DatasetSizes
 
 SETUP_BATCH_SIZE = 100
 
@@ -40,6 +42,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="run only this database; repeat for several (default: all)",
     )
     return parser
+
+
+def add_size_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--size", choices=SIZES, default="small", help="10k (small) or 100k (large) base vectors")
 
 
 def to_bench_args(args: argparse.Namespace) -> BenchArgs:
@@ -99,21 +105,38 @@ def wait_until_queryable(build_adapter: Callable[[], VectorDBAdapter], timeout_s
     raise TimeoutError(msg)
 
 
+def render_override(service: str, environment: dict[str, str]) -> str:
+    # JSON is valid YAML, so Compose reads this as an override file without a YAML dependency.
+    return json.dumps({"services": {service: {"environment": environment}}}, indent=2)
+
+
 @contextmanager
-def running_alone(service: str, database: Database, overrides: Sequence[Path] = ()) -> Iterator[VectorDBAdapter]:
+def running_alone(
+    service: str, database: Database, overrides: Sequence[Path] = (), dimensions: int | None = None
+) -> Iterator[VectorDBAdapter]:
     # Only the database under test runs. Idle neighbours still work in the background (Chroma
     # compacts, Qdrant optimizes, Go collects garbage) and hold their loaded data in the same
     # Docker VM; at 2 CPUs each, four containers claim every core of an 8-core laptop. Each
     # database starts from a fresh container and empty volumes, and leaves none behind.
     # overrides are Compose files layered over docker-compose.yml for this start only, so a
     # benchmark can change a service's settings without editing the published file.
-    files = [arg for path in (COMPOSE_FILE, *overrides) for arg in ("--file", str(path))] if overrides else []
+    with tempfile.TemporaryDirectory() as tmp:
+        layered = list(overrides)
+        if database.needs_dimensions:
+            if dimensions is None:
+                msg = f"{service} must be told the vector width at startup: pass the dataset's dimensions"
+                raise ValueError(msg)
+            dims_override = Path(tmp) / "dimensions.override.yml"
+            dims_override.write_text(render_override(service, {"GOVEC_DIMENSIONS": str(dimensions)}))
+            layered.append(dims_override)
 
-    compose("down", "--volumes")
-    compose(*files, "up", "--detach", service)
-    try:
-        wait_until_queryable(database.build_adapter, START_TIMEOUT_S)
+        files = [arg for path in (COMPOSE_FILE, *layered) for arg in ("--file", str(path))] if layered else []
 
-        yield database.build_adapter()
-    finally:
         compose("down", "--volumes")
+        compose(*files, "up", "--detach", service)
+        try:
+            wait_until_queryable(database.build_adapter, START_TIMEOUT_S)
+
+            yield database.build_adapter()
+        finally:
+            compose("down", "--volumes")

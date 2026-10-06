@@ -26,7 +26,7 @@ def main() -> None:
     results: dict[str, object] = {}
     for name, database in args.databases.items():
         print(f"Measuring query latency: {name}...")
-        with running_alone(name, database) as adapter:
+        with running_alone(name, database, dimensions=args.dataset.dimensions) as adapter:
             load_dataset(adapter, dataset.base)
 
             results[name] = {f"k_{k}": asdict(measure_query_latency(adapter, dataset.queries, k)) for k in K_VALUES}

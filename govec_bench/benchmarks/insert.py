@@ -1,6 +1,8 @@
 import time
 from dataclasses import asdict
 
+from tqdm import tqdm
+
 from govec_bench.adapters.base import VectorDBAdapter
 from govec_bench.benchmarks.common import parse_args, running_alone
 from govec_bench.datasets.base import ArrayItems
@@ -11,7 +13,8 @@ BATCH_SIZE = 100
 
 def measure_single_insert(adapter: VectorDBAdapter, items: ArrayItems) -> LatencyStats:
     latencies_ms = []
-    for item in items:
+    # The bar updates outside the timed call, so it costs nothing in the measurement.
+    for item in tqdm(items, desc="single inserts", unit="vec", leave=False):
         start = time.perf_counter()
         adapter.insert(item.id, item.vector, item.metadata)
         latencies_ms.append((time.perf_counter() - start) * 1000)
@@ -23,7 +26,7 @@ def measure_batch_insert(adapter: VectorDBAdapter, items: ArrayItems, batch_size
     # Each sample is a batch's wall time divided by its size, so this is
     # directly comparable to the per-vector single-insert latency above.
     latencies_ms = []
-    for i in range(0, len(items), batch_size):
+    for i in tqdm(range(0, len(items), batch_size), desc="batch inserts", unit="batch", leave=False):
         batch = items[i : i + batch_size]
 
         start = time.perf_counter()
@@ -42,7 +45,7 @@ def main() -> None:
     results: dict[str, object] = {}
     for name, database in args.databases.items():
         print(f"Measuring insert latency: {name}...")
-        with running_alone(name, database) as adapter:
+        with running_alone(name, database, dimensions=args.dataset.dimensions) as adapter:
             single_stats = measure_single_insert(adapter, dataset.base)
 
             adapter.reset()

@@ -1,0 +1,33 @@
+# govec config for the disk-backed variant (govec-mmap service).
+# Identical to govec-config.yaml except storage.enable_mmap -- isolates where the vectors live as
+# the only variable when comparing against the in-memory govec run.
+
+server:
+  host: ""
+  port: 9697
+  shutdown_timeout: 10s
+  log_level: "info"
+
+storage:
+  data_path: "./govec_data.bin"
+  wal_path: "./govec.wal"
+  auto_save_enabled: false # periodic saves hold the write lock for the whole snapshot -- pure noise for latency benchmarking
+  auto_save_interval: 60s
+  enable_mmap: true # the variable under test: vectors in memory-mapped files the OS pages, not the Go heap
+  mmap_store_path: "./govec_mmap/"
+
+engine:
+  index_type: "hnsw" # ANN, to compare against Chroma's own HNSW index on equal footing
+  quantization: "none"
+  distance_metric: "cosine" # matches ChromaAdapter's collection (hnsw:space: "cosine")
+  dimensions: 0 # mmap needs it at startup: the harness sets GOVEC_DIMENSIONS from the dataset
+  enable_hybrid_search: true
+  enable_metadata_index: false
+  hnsw_m: 16 # matches Chroma's and Qdrant's defaults; earlier M=48 and M=24 tunings bought no recall for the extra memory
+  hnsw_ef_search: 100 # Chroma's and Qdrant's default, and GoVec's after 0.2.0. On DBpedia, ef 50 gave 0.973 recall@10, ef 100 0.995
+  hnsw_ef_construction: 100 # Chroma's, Qdrant's and GoVec's default after 0.2.0 (200 before). 200 added no recall from ef 100 up and cost 21-35% on batch insert
+
+grpc:
+  enabled: false # not used by the benchmark adapters; disabled to keep the container's footprint minimal
+  port: 9698
+  max_recv_msg_size_mb: 64

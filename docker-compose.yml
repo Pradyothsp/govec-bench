@@ -42,6 +42,24 @@ services:
           cpus: "2"
           memory: 2G
 
+  govec-mmap:
+    image: ghcr.io/pradyothsp/govec:0.2.0
+    container_name: govec-bench-govec-mmap
+    ports:
+      - "9700:9697"
+    volumes:
+      - ./govec-config-mmap.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9697/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+
   chroma:
     # Chroma 1.4.4, pinned by digest: Chroma publishes no tag for this release.
     image: chromadb/chroma@sha256:1e0b73a187a28757c572acba508c46f48c9e8b0acaf5c20e6d95cdedce1acdf6

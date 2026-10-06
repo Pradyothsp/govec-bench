@@ -84,6 +84,12 @@ tasks:
       - bench-memory
     cmd: uv run python -m govec_bench.benchmarks.memory --dataset {{.DATASET | default "sift"}} {{.CLI_ARGS}}
 
+  bench:pipeline:
+    desc: Every benchmark from one load per database (SIZE=small, the default, or large for 100k)
+    aliases:
+      - bench-pipeline
+    cmd: uv run python -m govec_bench.benchmarks.pipeline --dataset {{.DATASET | default "sift"}} --size {{.SIZE | default "small"}} {{.CLI_ARGS}}
+
   bench:sweep:
     desc: Recall against latency across search ef for govec, chroma and qdrant (not part of bench:all)
     aliases:

@@ -4,6 +4,7 @@ from dataclasses import asdict
 import pytest
 
 from govec_bench.adapters.registry import DATABASES
+from govec_bench.benchmarks.common import render_override
 from govec_bench.benchmarks.ef_sweep import (
     DEFAULT_SERVICES,
     EF_CONSTRUCTION,
@@ -20,7 +21,6 @@ from govec_bench.benchmarks.ef_sweep import (
     govec_env,
     parse_sweep_args,
     plan_series,
-    render_override,
 )
 from govec_bench.datasets.registry import DATASETS
 from govec_bench.results import LatencyStats, RecallStats

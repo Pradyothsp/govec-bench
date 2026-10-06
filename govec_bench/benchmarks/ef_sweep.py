@@ -37,6 +37,7 @@ from govec_bench.benchmarks.common import (
     container_of,
     docker,
     load_dataset,
+    render_override,
     running_alone,
     to_bench_args,
 )
@@ -108,8 +109,8 @@ class SweepFailure:
 
 type SearchEfSetter = Callable[[VectorDBAdapter, int], None]
 
-# Starts a database ready to load at (search ef, ef_construction).
-type FreshAt = Callable[[str, Database, int, int], AbstractContextManager[VectorDBAdapter]]
+# Starts a database ready to load at (search ef, ef_construction, dataset dimensions).
+type FreshAt = Callable[[str, Database, int, int, int], AbstractContextManager[VectorDBAdapter]]
 
 
 def _positive_int(value: str) -> int:
@@ -166,21 +167,25 @@ def _check_container_env(service: str, expected: dict[str, str]) -> None:
 
 
 @contextmanager
-def _govec_at(service: str, database: Database, ef: int, ef_construction: int) -> Iterator[VectorDBAdapter]:
+def _govec_at(
+    service: str, database: Database, ef: int, ef_construction: int, dimensions: int
+) -> Iterator[VectorDBAdapter]:
     environment = govec_env(ef_search=ef, ef_construction=ef_construction)
 
     with tempfile.TemporaryDirectory() as tmp:
         override = Path(tmp) / "ef-sweep.override.yml"
         override.write_text(render_override(service, environment))
 
-        with running_alone(service, database, overrides=(override,)) as adapter:
+        with running_alone(service, database, overrides=(override,), dimensions=dimensions) as adapter:
             _check_container_env(service, environment)
             yield adapter
 
 
 @contextmanager
-def _chroma_at(service: str, database: Database, ef: int, ef_construction: int) -> Iterator[VectorDBAdapter]:
-    with running_alone(service, database) as adapter:
+def _chroma_at(
+    service: str, database: Database, ef: int, ef_construction: int, dimensions: int
+) -> Iterator[VectorDBAdapter]:
+    with running_alone(service, database, dimensions=dimensions) as adapter:
         if not isinstance(adapter, ChromaAdapter):
             msg = f"expected a ChromaAdapter, got {type(adapter).__name__}"
             raise TypeError(msg)
@@ -205,6 +210,7 @@ IN_PLACE: dict[str, SearchEfSetter] = {
 REBUILD_PER_EF: dict[str, FreshAt] = {
     "govec": _govec_at,
     "govec-scalar": _govec_at,
+    "govec-mmap": _govec_at,
     "chroma": _chroma_at,
 }
 
@@ -231,11 +237,6 @@ def govec_env(ef_search: int, ef_construction: int) -> dict[str, str]:
         "GOVEC_HNSW_EF_SEARCH": str(ef_search),
         "GOVEC_HNSW_EF_CONSTRUCTION": str(ef_construction),
     }
-
-
-def render_override(service: str, environment: dict[str, str]) -> str:
-    # JSON is valid YAML, so Compose reads this as an override file without a YAML dependency.
-    return json.dumps({"services": {service: {"environment": environment}}}, indent=2)
 
 
 def measure_point(adapter: VectorDBAdapter, workload: Workload, ef: int, k: int) -> SweepPoint:
@@ -274,7 +275,7 @@ def sweep_in_place(
     service: str, database: Database, workload: Workload, sweep: SweepArgs, set_ef: SearchEfSetter
 ) -> list[SweepPoint]:
     points = []
-    with running_alone(service, database) as adapter:
+    with running_alone(service, database, dimensions=sweep.bench.dataset.dimensions) as adapter:
         _load_checked(adapter, workload.base)
 
         for ef in sweep.ef_values:
@@ -291,7 +292,7 @@ def sweep_by_rebuild(
     points = []
     for ef in sweep.ef_values:
         print(f"  ef={ef} (fresh container)")
-        with fresh_at(plan.service, database, ef, plan.ef_construction) as adapter:
+        with fresh_at(plan.service, database, ef, plan.ef_construction, sweep.bench.dataset.dimensions) as adapter:
             _load_checked(adapter, workload.base)
 
             points.extend(measure_ef(adapter, workload, ef, sweep.k_values))
