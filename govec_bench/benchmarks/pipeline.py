@@ -87,6 +87,7 @@ class Record:
     batch_insert: LatencyStats | None = None
     memory: MemoryResult | None = None
     queries: list[QueryPoint] = field(default_factory=list)
+    queries_grpc: list[QueryPoint] = field(default_factory=list)  # same index, other transport
     cold_start_loaded: LatencyStats | None = None
     cold_start_empty: LatencyStats | None = None
     single_insert: LatencyStats | None = None
@@ -217,18 +218,34 @@ def query_point(adapter: VectorDBAdapter, workload: Workload, k: int) -> QueryPo
     return QueryPoint(k=k, recall=compute_recall_stats(recalls), latency=compute_latency_stats(latencies_ms))
 
 
-def measure_queries(run: Run) -> None:
-    adapter = run.require_adapter()
-
+def measure_query_points(adapter: VectorDBAdapter, workload: Workload, label: str) -> list[QueryPoint]:
     # One untimed pass first, so k=1 doesn't also pay for cold caches.
-    for query in tqdm(run.workload.queries, desc="warm-up", leave=False):
+    for query in tqdm(workload.queries, desc="warm-up", leave=False):
         adapter.query(query, k=max(K_VALUES))
 
+    points = []
     for k in K_VALUES:
-        point = query_point(adapter, run.workload, k)
-        run.record.queries.append(point)
+        point = query_point(adapter, workload, k)
+        points.append(point)
 
-        show(f"k={k}: recall {point.recall.mean:.4f} (worst {point.recall.min:.2f}); {latency_text(point.latency)}")
+        recall = f"recall {point.recall.mean:.4f} (worst {point.recall.min:.2f})"
+        show(f"k={k}{label}: {recall}; {latency_text(point.latency)}")
+
+    return points
+
+
+def measure_queries(run: Run) -> None:
+    run.record.queries = measure_query_points(run.require_adapter(), run.workload, "")
+
+
+def measure_queries_grpc(run: Run) -> None:
+    # The same index and container, queried over gRPC instead of REST: only the transport differs.
+    # Recall should match the REST step exactly; a difference would mean a different search.
+    if run.database.build_grpc_adapter is None:
+        show("no gRPC client for this database; skipped")
+        return
+
+    run.record.queries_grpc = measure_query_points(run.database.build_grpc_adapter(), run.workload, " over gRPC")
 
 
 def wait_until_answering(build_adapter: Callable[[], VectorDBAdapter], probe: Vector, timeout_s: float) -> float:
@@ -284,6 +301,7 @@ PIPELINE: list[Stage] = [
             Step("save", save),
             Step("disk and RAM (RAM sampled for 60 s)", measure_memory),
             Step("recall and query latency", measure_queries),
+            Step("recall and query latency over gRPC", measure_queries_grpc),
             Step(f"{RESTARTS} restarts with the data loaded", measure_loaded_cold_start),
         ],
     ),
@@ -317,11 +335,11 @@ def result_to_json(result: Record, error: str | None = None) -> dict[str, object
     if result.memory is not None:
         payload["memory"] = memory_result_to_json(result.memory)
 
-    if result.queries:
-        payload["queries"] = {
-            f"k_{point.k}": {"recall": asdict(point.recall), "latency": asdict(point.latency)}
-            for point in result.queries
-        }
+    for name, points in (("queries", result.queries), ("queries_grpc", result.queries_grpc)):
+        if points:
+            payload[name] = {
+                f"k_{point.k}": {"recall": asdict(point.recall), "latency": asdict(point.latency)} for point in points
+            }
 
     return payload
 

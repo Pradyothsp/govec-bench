@@ -27,6 +27,6 @@ engine:
   hnsw_ef_construction: 100 # Chroma's, Qdrant's and GoVec's default after 0.2.0 (200 before). 200 added no recall from ef 100 up and cost 21-35% on batch insert
 
 grpc:
-  enabled: false # not used by the benchmark adapters; disabled to keep the container's footprint minimal
+  enabled: true # only the pipeline's gRPC query-latency step uses it; everything else goes over REST
   port: 9698
   max_recv_msg_size_mb: 64

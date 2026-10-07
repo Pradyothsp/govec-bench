@@ -34,3 +34,13 @@ def test_select_databases__names__returns_only_those_in_registry_order() -> None
     # Assert
     assert list(selected) == ["govec", "qdrant"]
     assert selected["qdrant"] == DATABASES["qdrant"]
+
+
+def test_databases__grpc_client__only_govec_has_one() -> None:
+    # Arrange
+
+    # Act
+    with_grpc = [name for name, database in DATABASES.items() if database.build_grpc_adapter is not None]
+
+    # Assert
+    assert with_grpc == ["govec"]

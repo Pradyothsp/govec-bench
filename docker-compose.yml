@@ -6,6 +6,7 @@ services:
     container_name: govec-bench-govec
     ports:
       - "9697:9697"
+      - "9698:9698" # gRPC, for the pipeline's REST-vs-gRPC query latency step
     # GOMEMLIMIT cuts govec's measured RAM by about 46% at no latency cost, but 250MiB is tuned to
     # this benchmark's 100k-vector dataset and is no general default. Left off so every database
     # runs on stock settings; uncomment to reproduce that experiment.

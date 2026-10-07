@@ -120,3 +120,27 @@ def test_result_to_json__failed_partway__keeps_what_was_measured_and_the_error()
         "error": "TimeoutError: boom",
         "batch_insert": {"mean_ms": 1.0, "p50_ms": 1.0, "p99_ms": 1.0},
     }
+
+
+def test_pipeline__grpc_queries__run_right_after_the_rest_ones_on_the_same_index() -> None:
+    # Arrange
+    loaded = PIPELINE[0]
+
+    # Act
+    labels = [step.label for step in loaded.steps]
+
+    # Assert
+    rest = labels.index("recall and query latency")
+    assert labels[rest + 1] == "recall and query latency over gRPC"
+
+
+def test_result_to_json__grpc_queries__under_their_own_key() -> None:
+    # Arrange
+    point = QueryPoint(k=10, recall=RecallStats(mean=0.99, min=0.8, max=1.0), latency=_latency(1.5))
+    record = Record(queries=[point], queries_grpc=[point])
+
+    # Act
+    payload = result_to_json(record)
+
+    # Assert
+    assert payload["queries_grpc"] == payload["queries"]

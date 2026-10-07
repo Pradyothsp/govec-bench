@@ -18,6 +18,9 @@ class Database(NamedTuple):
     needs_dimensions: bool = False
     # Runs only when named with --db: a variant for a specific comparison, not the standard suite.
     opt_in: bool = False
+    # A second client to the same container over another transport, for comparing query latency
+    # on the same index. None for databases the bench drives one way only.
+    build_grpc_adapter: Callable[[], VectorDBAdapter] | None = None
 
 
 GOVEC_DISK_PATHS = ("/data/govec_data.bin", "/data/govec.wal")
@@ -25,7 +28,9 @@ GOVEC_DISK_PATHS = ("/data/govec_data.bin", "/data/govec.wal")
 # Keyed by docker-compose.yml service name, which is also the name results are written under.
 # The one list of databases: every benchmark runs these, except opt-in ones, unless --db narrows it.
 DATABASES: dict[str, Database] = {
-    "govec": Database(GovecAdapter, GOVEC_DISK_PATHS),
+    "govec": Database(
+        GovecAdapter, GOVEC_DISK_PATHS, build_grpc_adapter=partial(GovecAdapter, port=9698, protocol="grpc")
+    ),
     # GoVec again with int8 scalar quantization (govec-config-scalar.yaml), to measure what
     # quantization costs and saves against float32.
     "govec-scalar": Database(partial(GovecAdapter, port=9699), GOVEC_DISK_PATHS),

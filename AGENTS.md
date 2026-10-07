@@ -24,7 +24,7 @@ several "GoVec wins" here have turned out to be measurement errors.
 | `task docker:up` / `task docker:down` | Start / stop all databases, for manual poking; benchmarks start their own |
 | `task bench:all` | Run all five benchmarks; each writes `results/<benchmark>_<timestamp>.json`. `DATASET=dbpedia` switches dataset |
 | `task bench:insert` (`query`, `recall`, `memory`, `coldstart`) | Run one benchmark; `-- --db govec --db qdrant` runs only those databases |
-| `task bench:pipeline` | Every benchmark from one load per database: batch insert, disk and RAM, recall and query latency, restarts with data and empty, single inserts on 10k. `SIZE=large` for 100k |
+| `task bench:pipeline` | Every benchmark from one load per database: batch insert, disk and RAM, recall and query latency (GoVec also over gRPC, same index), restarts with data and empty, single inserts on 10k. `SIZE=large` for 100k |
 | `task bench:sweep` | Recall@k against query latency per search ef (`-- --ef 50 --ef 100 --k 10` to narrow); GoVec, Chroma and Qdrant unless `--db` says otherwise (`--db govec-scalar` adds int8); not part of `bench:all` |
 | `COMPOSE_FILE=docker-compose.yml:compose.govec-efc200.yaml task bench:insert -- --db govec` | Any benchmark with GoVec built at `ef_construction=200` (its default up to 0.2.0) instead of 100 |
 | `task test` | Unit tests |
@@ -37,7 +37,7 @@ several "GoVec wins" here have turned out to be measurement errors.
 govec_bench/
   adapters/
     base.py            VectorDBAdapter: insert, batch_insert, query, stats, reset
-    govec_adapter.py   via the govec SDK from PyPI, REST transport
+    govec_adapter.py   via the govec SDK from PyPI, REST transport (gRPC for the pipeline's gRPC step)
     chroma_adapter.py  via chromadb's HTTP client, cosine space
     qdrant_adapter.py  via qdrant-client, cosine distance, keep-alive forced on
     registry.py        DATABASES: the one list of databases, by compose service: adapter, disk paths,
@@ -126,6 +126,9 @@ govec-config*.yaml     GoVec's config for the float32 and int8 services
   1536-d vectors it has written about 30 GB, though it settles under 1 GB. 100k runs (memory
   benchmark, `--size large`) check first for 35 GB free, inside Docker's disk and, on Docker
   Desktop, on the Mac's disk it grows into, and stop with the reason otherwise.
+- **The SDK's gRPC stubs need `grpcio>=1.84`,** but the SDK only declares `>=1.60`, so an older
+  `grpcio` in `uv.lock` passes install and crashes the first gRPC call on import. Keep the lock at
+  1.84 or later.
 - **Keep the SDK and the server image in step.** The govec adapter uses the published SDK. When
   you bump the `ghcr.io/pradyothsp/govec` pin, bump `govec>=…` in `pyproject.toml` with it: a
   new server behind an old pinned SDK once crashed the query benchmark mid-run.

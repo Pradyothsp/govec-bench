@@ -1,6 +1,7 @@
 from typing import override
 
 from govec import GoVecClient
+from govec.client import Protocol
 from govec.models import InsertRequest
 
 from govec_bench.adapters.base import InsertItem, QueryResult, Stats, VectorDBAdapter
@@ -15,8 +16,9 @@ class GovecAdapter(VectorDBAdapter):
         api_key: str = "",
         *,
         tls: bool = False,
+        protocol: Protocol = "rest",
     ) -> None:
-        self._client = GoVecClient(host=host, port=port, api_key=api_key, protocol="rest", tls=tls)
+        self._client = GoVecClient(host=host, port=port, api_key=api_key, protocol=protocol, tls=tls)
 
     @override
     def insert(self, vector_id: str, vector: Vector, metadata: dict[str, str] | None = None) -> None:
