@@ -5,7 +5,7 @@ import chromadb
 from chromadb.api.collection_configuration import HNSWConfiguration
 from chromadb.api.types import CollectionMetadata, Metadatas
 
-from govec_bench.adapters.base import InsertItem, QueryResult, Stats, VectorDBAdapter
+from govec_bench.adapters.base import DEFAULT_SEARCH_EF, InsertItem, QueryResult, Stats, VectorDBAdapter
 from govec_bench.types import Vector
 
 COLLECTION_NAME = "govec_bench"
@@ -23,16 +23,12 @@ def _to_str_metadata(meta: Mapping[str, object] | None) -> dict[str, str] | None
 class ChromaAdapter(VectorDBAdapter):
     def __init__(self, host: str = "localhost", port: int = 8001) -> None:
         self._client = chromadb.HttpClient(host=host, port=port)
-        # None leaves ef_search at Chroma's default; recreate_with_search_ef() sets it.
-        self._search_ef: int | None = None
+        # recreate_with_search_ef() overrides it.
+        self._search_ef = DEFAULT_SEARCH_EF
         self._collection = self._client.get_or_create_collection(name=COLLECTION_NAME, metadata=self._metadata())
 
     def _metadata(self) -> CollectionMetadata:
-        metadata: CollectionMetadata = {"hnsw:space": "cosine"}
-        if self._search_ef is not None:
-            metadata["hnsw:search_ef"] = self._search_ef
-
-        return metadata
+        return {"hnsw:space": "cosine", "hnsw:search_ef": self._search_ef}
 
     @override
     def insert(self, vector_id: str, vector: Vector, metadata: dict[str, str] | None = None) -> None:

@@ -77,6 +77,7 @@ def load_dataset(adapter: VectorDBAdapter, items: ArrayItems, batch_size: int = 
     for i in range(0, len(items), batch_size):
         adapter.batch_insert(items[i : i + batch_size])
 
+    adapter.wait_until_indexed()
     adapter.wait_until_settled()
 
 
@@ -136,19 +137,19 @@ def container_of(service: str) -> str:
     return docker("compose", "ps", "--quiet", service).stdout.strip()
 
 
-def wait_until_queryable(build_adapter: Callable[[], VectorDBAdapter], timeout_s: float) -> float:
+def wait_until_queryable(build_adapter: Callable[[], VectorDBAdapter], timeout_s: float) -> None:
     # "Queryable" == the adapter's own reset() succeeds -- the same admin call
     # every other benchmark already uses to get a clean starting state, so it
     # doubles as a real, adapter-agnostic readiness probe (constructing the
     # adapter itself makes the first network round-trip for Chroma).
-    start = time.perf_counter()
-    deadline = start + timeout_s
+    deadline = time.perf_counter() + timeout_s
     while time.perf_counter() < deadline:
         try:
             build_adapter().reset()
-            return (time.perf_counter() - start) * 1000
         except Exception:  # noqa: BLE001 -- expected while the service is still coming up; keep polling
             time.sleep(POLL_INTERVAL_S)
+        else:
+            return
 
     msg = f"service did not become queryable within {timeout_s}s"
     raise TimeoutError(msg)

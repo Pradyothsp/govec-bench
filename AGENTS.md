@@ -24,7 +24,7 @@ several "GoVec wins" here have turned out to be measurement errors.
 | `task docker:up` / `task docker:down` | Start / stop all databases, for manual poking; benchmarks start their own |
 | `task bench:all` | Run all five benchmarks; each writes `results/<benchmark>_<timestamp>.json`. `DATASET=dbpedia` switches dataset |
 | `task bench:insert` (`query`, `recall`, `memory`, `coldstart`) | Run one benchmark; `-- --db govec --db qdrant` runs only those databases |
-| `task bench:pipeline` | Every benchmark from one load per database: batch insert, disk and RAM, recall and query latency (GoVec also over gRPC, same index), restarts with data and empty, single inserts on 10k. `SIZE=large` for 100k |
+| `task bench:pipeline` | Every benchmark from one load per database: batch insert, disk and RAM, recall and query latency (GoVec and Qdrant also over gRPC, same index; Chroma has no gRPC client), restarts with data and empty, single inserts on 10k. `SIZE=large` for 100k |
 | `task bench:sweep` | Recall@k against query latency per search ef (`-- --ef 50 --ef 100 --k 10` to narrow); GoVec, Chroma and Qdrant unless `--db` says otherwise (`--db govec-scalar` adds int8); not part of `bench:all` |
 | `COMPOSE_FILE=docker-compose.yml:compose.govec-efc200.yaml task bench:insert -- --db govec` | Any benchmark with GoVec built at `ef_construction=200` (its default up to 0.2.0) instead of 100 |
 | `task test` | Unit tests |
@@ -39,7 +39,7 @@ govec_bench/
     base.py            VectorDBAdapter: insert, batch_insert, query, stats, reset
     govec_adapter.py   via the govec SDK from PyPI, REST transport (gRPC for the pipeline's gRPC step)
     chroma_adapter.py  via chromadb's HTTP client, cosine space
-    qdrant_adapter.py  via qdrant-client, cosine distance, keep-alive forced on
+    qdrant_adapter.py  via qdrant-client, cosine distance, keep-alive forced on (gRPC for the pipeline's gRPC step)
     registry.py        DATABASES: the one list of databases, by compose service: adapter, disk paths,
                        whether it needs the dimension at startup, whether it's opt-in (govec-mmap)
   benchmarks/          one script per benchmark; common.py has arguments, dataset loading, docker helpers
@@ -92,6 +92,14 @@ govec-config*.yaml     GoVec's config for the float32 and int8 services
   timing. Treat GoVec RAM numbers as an upper bound.
 - **Cold start means are fragile.** Five restarts per run; one slow restart moves the mean by
   80%. Report the median.
+- **Time a restart from before `compose start`.** The server boots while that command runs;
+  timing from after it measured little more than the probe (9 ms "restarts"; Chroma's probe
+  makes several calls).
+- **Qdrant indexes after its upserts return.** Insert timings wait for indexing once, at the end
+  of the load (`wait_until_indexed()`). Polling after every batch put the 50 ms poll interval
+  inside each batch and made Qdrant look 5x slower than it is; skipping the wait on single
+  inserts flattered it instead. Its lowered `indexing_threshold` stays: on stock settings it
+  never indexes segments under 10 MB (all of SIFT 10k, 15% of DBpedia 10k).
 - **Docker Desktop makes `fsync` misleadingly fast** on macOS, which flatters every database's
   write path. Numbers are comparable to each other, not to bare metal.
 - **Chroma caps batch sizes**, and Qdrant accepts only `u64` or UUID point IDs (the adapter

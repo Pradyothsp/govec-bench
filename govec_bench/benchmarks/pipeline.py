@@ -14,6 +14,7 @@ The ef sweep stays separate: GoVec and Chroma need a build per ef.
 """
 
 import argparse
+import random
 import time
 import traceback
 from collections.abc import Callable, Sequence
@@ -37,7 +38,7 @@ from govec_bench.benchmarks.common import (
     running_alone,
     to_bench_args,
 )
-from govec_bench.benchmarks.insert import BATCH_SIZE, measure_batch_insert, measure_single_insert
+from govec_bench.benchmarks.insert import BATCH_SIZE, InsertStats, measure_batch_insert, measure_single_insert
 from govec_bench.benchmarks.memory import (
     FootprintStats,
     MemoryResult,
@@ -84,13 +85,13 @@ class QueryPoint:
 @dataclass(slots=True)
 class Record:
     # One field per measurement; a step that doesn't run leaves its field empty.
-    batch_insert: LatencyStats | None = None
+    batch_insert: InsertStats | None = None
     memory: MemoryResult | None = None
     queries: list[QueryPoint] = field(default_factory=list)
     queries_grpc: list[QueryPoint] = field(default_factory=list)  # same index, other transport
     cold_start_loaded: LatencyStats | None = None
     cold_start_empty: LatencyStats | None = None
-    single_insert: LatencyStats | None = None
+    single_insert: InsertStats | None = None
 
 
 @dataclass(slots=True)
@@ -141,6 +142,13 @@ def latency_text(stats: LatencyStats) -> str:
     return f"mean {stats.mean_ms:.2f} ms, p50 {stats.p50_ms:.2f}, p99 {stats.p99_ms:.2f}"
 
 
+def insert_text(stats: InsertStats) -> str:
+    return (
+        f"{stats.total_s:.1f} s until indexed, {stats.per_vector_ms:.2f} ms per vector; "
+        f"calls alone {latency_text(stats.calls)}"
+    )
+
+
 def mb(n_bytes: int) -> str:
     return f"{n_bytes / 1e6:,.0f} MB"
 
@@ -157,7 +165,7 @@ def measure_baseline(run: Run) -> None:
 def batch_insert(run: Run) -> None:
     run.record.batch_insert = measure_batch_insert(run.require_adapter(), run.workload.base, BATCH_SIZE)
 
-    show(f"per vector: {latency_text(run.record.batch_insert)}")
+    show(insert_text(run.record.batch_insert))
 
 
 def settle(run: Run) -> None:
@@ -248,15 +256,14 @@ def measure_queries_grpc(run: Run) -> None:
     run.record.queries_grpc = measure_query_points(run.database.build_grpc_adapter(), run.workload, " over gRPC")
 
 
-def wait_until_answering(build_adapter: Callable[[], VectorDBAdapter], probe: Vector, timeout_s: float) -> float:
+def wait_until_answering(build_adapter: Callable[[], VectorDBAdapter], probe: Vector, timeout_s: float) -> None:
     # Not common.wait_until_queryable: its probe is reset(), which would delete the loaded data.
     # Answering a query means the data is back, not only that the process is up.
-    start = time.perf_counter()
-    deadline = start + timeout_s
+    deadline = time.perf_counter() + timeout_s
     while time.perf_counter() < deadline:
         try:
             if build_adapter().query(probe, k=1):
-                return (time.perf_counter() - start) * 1000
+                return
         except Exception:  # noqa: BLE001, S110 -- expected while the data is still loading; keep polling
             pass
         time.sleep(POLL_INTERVAL_S)
@@ -266,12 +273,16 @@ def wait_until_answering(build_adapter: Callable[[], VectorDBAdapter], probe: Ve
 
 
 def measure_loaded_cold_start(run: Run) -> None:
+    # Timed from before `compose start`, as the empty restarts are: the server boots while it runs.
     probe = run.workload.queries[0]
     latencies_ms = []
     for _ in tqdm(range(RESTARTS), desc="restarts", leave=False):
         compose("stop", run.service)
+
+        start = time.perf_counter()
         compose("start", run.service)
-        latencies_ms.append(wait_until_answering(run.database.build_adapter, probe, LOADED_START_TIMEOUT_S))
+        wait_until_answering(run.database.build_adapter, probe, LOADED_START_TIMEOUT_S)
+        latencies_ms.append((time.perf_counter() - start) * 1000)
 
     run.record.cold_start_loaded = compute_latency_stats(latencies_ms)
 
@@ -287,7 +298,7 @@ def measure_empty_cold_start(run: Run) -> None:
 def single_insert(run: Run) -> None:
     run.record.single_insert = measure_single_insert(run.require_adapter(), run.workload.single_insert_items)
 
-    show(f"per vector: {latency_text(run.record.single_insert)}")
+    show(insert_text(run.record.single_insert))
 
 
 # The pipeline: stages in order, each in a fresh container; steps in order within a stage.
@@ -324,11 +335,20 @@ def run_pipeline(run: Run, pipeline: Sequence[Stage]) -> None:
         run.adapter = None
 
 
-def result_to_json(result: Record, error: str | None = None) -> dict[str, object]:
-    # A database that failed partway keeps what it measured before the error.
-    payload: dict[str, object] = {} if error is None else {"error": error}
+def shuffled(names: Sequence[str]) -> list[str]:
+    # A fresh database order every run. A night of runs drifts (heat, background load), and in a
+    # fixed order that drift lands on the same database every time; medians can't remove it.
+    return random.sample(list(names), k=len(names))
+
+
+def result_to_json(result: Record, run_position: int, error: str | None = None) -> dict[str, object]:
+    # A database that failed partway keeps what it measured before the error. run_position is
+    # where it ran in this run's order (0 = first), to check results for an order effect.
+    payload: dict[str, object] = {"run_position": run_position}
+    if error is not None:
+        payload["error"] = error
     for name in ("batch_insert", "cold_start_loaded", "cold_start_empty", "single_insert"):
-        stats: LatencyStats | None = getattr(result, name)
+        stats: InsertStats | LatencyStats | None = getattr(result, name)
         if stats is not None:
             payload[name] = asdict(stats)
 
@@ -357,10 +377,14 @@ def main() -> None:
         dimensions=args.bench.dataset.dimensions,
     )
 
+    databases = args.bench.databases
+    order = shuffled(list(databases))
+    print(f"Run order: {', '.join(order)}")
+
     results: dict[str, object] = {}
-    for name, database in args.bench.databases.items():
+    for position, name in enumerate(order):
         print(f"{name}:")
-        run = Run(service=name, database=database, workload=workload)
+        run = Run(service=name, database=databases[name], workload=workload)
         error = None
         try:
             run_pipeline(run, PIPELINE)
@@ -368,8 +392,10 @@ def main() -> None:
             traceback.print_exc()
             error = f"{type(exc).__name__}: {exc}"
 
-        results[name] = result_to_json(run.record, error)
+        results[name] = result_to_json(run.record, position, error)
 
+    # Registry order in the file, whatever order they ran in, so every results file lists databases alike.
+    results = {name: results[name] for name in databases}
     path = write_results(benchmark="pipeline", dataset=dataset.name, results=results)
     print(f"Wrote {path}")
 

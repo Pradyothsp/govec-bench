@@ -3,6 +3,11 @@ from dataclasses import dataclass, field
 
 from govec_bench.types import Vector
 
+# Every database searches with this ef unless a benchmark sets another: Chroma's and Qdrant's
+# adapters pass it explicitly rather than rely on their defaults matching. GoVec's comes from
+# hnsw_ef_search in govec-config*.yaml, which must match it.
+DEFAULT_SEARCH_EF = 100
+
 
 @dataclass(frozen=True, slots=True)
 class InsertItem:
@@ -40,6 +45,12 @@ class VectorDBAdapter(ABC):
 
     @abstractmethod
     def reset(self) -> None: ...
+
+    def wait_until_indexed(self) -> None:
+        # Returns once every vector inserted so far is in the search index. Called once at the
+        # end of a load, inside the insert benchmark's timing, so a database that indexes in the
+        # background pays for it there. GoVec and Chroma index before an insert returns.
+        return
 
     def wait_until_settled(self) -> None:
         # Called once after a full load, before anything is measured against it. A database that

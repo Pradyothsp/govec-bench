@@ -1,3 +1,4 @@
+import time
 from collections.abc import Callable
 from dataclasses import asdict
 
@@ -13,12 +14,16 @@ POLL_TIMEOUT_S = 60
 
 def measure_cold_start(service: str, build_adapter: Callable[[], VectorDBAdapter]) -> LatencyStats:
     # running_alone() hands over a fresh, empty container, so every iteration
-    # restarts an empty index.
+    # restarts an empty index. Timed from before `compose start`: the server boots
+    # while that command runs, so starting the clock after it timed one request.
     latencies_ms = []
     for _ in tqdm(range(ITERATIONS), desc="restarts", leave=False):
         compose("stop", service)
+
+        start = time.perf_counter()
         compose("start", service)
-        latencies_ms.append(wait_until_queryable(build_adapter, POLL_TIMEOUT_S))
+        wait_until_queryable(build_adapter, POLL_TIMEOUT_S)
+        latencies_ms.append((time.perf_counter() - start) * 1000)
 
     return compute_latency_stats(latencies_ms)
 

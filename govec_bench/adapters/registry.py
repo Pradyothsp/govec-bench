@@ -43,7 +43,7 @@ DATABASES: dict[str, Database] = {
         opt_in=True,
     ),
     "chroma": Database(ChromaAdapter, ("/data",)),
-    "qdrant": Database(QdrantAdapter, ("/qdrant/storage",)),
+    "qdrant": Database(QdrantAdapter, ("/qdrant/storage",), build_grpc_adapter=partial(QdrantAdapter, grpc=True)),
 }
 
 

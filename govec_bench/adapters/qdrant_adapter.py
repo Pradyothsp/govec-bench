@@ -16,21 +16,17 @@ from qdrant_client.models import (
     VectorParams,
 )
 
-from govec_bench.adapters.base import InsertItem, QueryResult, Stats, VectorDBAdapter
+from govec_bench.adapters.base import DEFAULT_SEARCH_EF, InsertItem, QueryResult, Stats, VectorDBAdapter
 from govec_bench.types import Vector
 
 COLLECTION_NAME = "govec_bench"
 
 # upsert(wait=True) only waits for the write to be durable -- Qdrant's HNSW
 # indexing happens in a separate background optimizer job that can lag behind
-# ingest. govec and Chroma are both fully synchronous (a vector is graph-
-# connected by the time insert/batch_insert returns), so batch_insert polls
-# here until Qdrant's indexer has actually caught up too -- otherwise recall/
-# query benchmarks that load-then-immediately-query (no gap in between,
-# unlike separate insert-latency vs recall benchmark runs) could measure
-# against a partially-indexed graph. Real cost: Qdrant's reported insert
-# latency reflects "durable and indexed," not just "durable" -- a fairer
-# number for cross-adapter comparison, even if less flattering on its own.
+# ingest. govec and Chroma index before an insert returns, so
+# wait_until_indexed() polls until Qdrant's indexer has caught up, once at the
+# end of a load. Polling after every batch instead put the poll interval
+# inside each batch's timing and stopped Qdrant indexing batches together.
 _INDEXING_POLL_INTERVAL_S = 0.05
 # 30s was fine at SIFT10K scale but too tight at SIFT100K --
 # indexing catch-up cost grows with collection size, and memory.py's own
@@ -61,19 +57,22 @@ def _to_point_id(vector_id: str) -> str:
 
 
 class QdrantAdapter(VectorDBAdapter):
-    def __init__(self, host: str = "localhost", port: int = 6333) -> None:
+    def __init__(self, host: str = "localhost", port: int = 6333, grpc_port: int = 6334, *, grpc: bool = False) -> None:
         # qdrant-client disables keep-alive for localhost by default, opening a
         # new TCP connection per request. That puts a handshake inside every
         # measured latency (the govec and Chroma clients reuse one connection),
         # and 10k rapid single inserts exhaust Docker Desktop's port forwarding.
-        self._client = QdrantClient(url=f"http://{host}:{port}", limits=httpx.Limits())
+        # With grpc, every call the adapter makes goes over one gRPC channel instead.
+        self._client = QdrantClient(
+            url=f"http://{host}:{port}", grpc_port=grpc_port, prefer_grpc=grpc, limits=httpx.Limits()
+        )
         # Qdrant needs the vector dimension at collection-creation time, unlike
         # Chroma's lazy collection -- create it on first insert instead, once
         # a real vector tells us the dimension. Avoids hardcoding a dataset's
         # dimension into the adapter or changing the VectorDBAdapter interface.
         self._collection_ready = False
-        # None searches with Qdrant's default ef (ef_construct); set_search_ef() overrides it.
-        self._search_params: SearchParams | None = None
+        # set_search_ef() overrides it.
+        self._search_params = SearchParams(hnsw_ef=DEFAULT_SEARCH_EF)
 
     def set_search_ef(self, ef: int) -> None:
         # Qdrant takes ef per query, so a sweep can change it without rebuilding the graph.
@@ -107,7 +106,10 @@ class QdrantAdapter(VectorDBAdapter):
                 # the opposite, disabling indexing entirely (verified against
                 # Qdrant's docs after an initial attempt at 0 silently built no
                 # index at all). 1 (KB) is effectively "index almost
-                # immediately" without actually disabling it.
+                # immediately" without actually disabling it. Still needed at
+                # 1536 dimensions: the stock 10,000 KB threshold applies per
+                # segment, and on v1.19 a DBpedia 10k load left 1,500 vectors
+                # in an unindexed segment, searched by brute force.
                 optimizers_config=OptimizersConfigDiff(indexing_threshold=1),
             )
         self._collection_ready = True
@@ -120,16 +122,6 @@ class QdrantAdapter(VectorDBAdapter):
 
     @override
     def insert(self, vector_id: str, vector: Vector, metadata: dict[str, str] | None = None) -> None:
-        # Deliberately doesn't wait for indexing (unlike batch_insert below):
-        # this is only ever called in a tight one-at-a-time loop (insert.py's
-        # single-insert benchmark, 10,000 sequential calls). Waiting for the
-        # *whole collection's* indexed_vectors_count to catch up to
-        # points_count after every single item is a fundamentally different,
-        # ever-growing cost as the collection grows -- not a stable per-item
-        # one -- and it isn't needed for correctness here: nothing else reads
-        # this adapter's data back within the same benchmark run, unlike
-        # batch_insert, which recall/query/memory benchmarks query
-        # immediately after loading.
         item = InsertItem(id=vector_id, vector=vector, metadata=metadata)
         self._ensure_collection(len(vector))
         self._client.upsert(collection_name=COLLECTION_NAME, points=[self._to_point(item)], wait=True)
@@ -141,9 +133,9 @@ class QdrantAdapter(VectorDBAdapter):
         self._ensure_collection(len(items[0].vector))
         points: Sequence[PointStruct] = [self._to_point(item) for item in items]
         self._client.upsert(collection_name=COLLECTION_NAME, points=points, wait=True)
-        self._wait_for_indexing()
 
-    def _wait_for_indexing(self) -> None:
+    @override
+    def wait_until_indexed(self) -> None:
         deadline = time.monotonic() + _INDEXING_POLL_TIMEOUT_S
         while time.monotonic() < deadline:
             try:
@@ -166,7 +158,7 @@ class QdrantAdapter(VectorDBAdapter):
     def wait_until_settled(self) -> None:
         # Indexed is not idle: the optimizer keeps merging segments after every vector is indexed,
         # competing with queries for the container's 2 CPUs. Green means it has stopped. Not in
-        # batch_insert, so the insert benchmark's timings don't include it.
+        # wait_until_indexed, so the insert benchmark's timings don't include it.
         deadline = time.monotonic() + _SETTLE_TIMEOUT_S
         while time.monotonic() < deadline:
             try:
