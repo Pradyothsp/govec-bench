@@ -1,0 +1,489 @@
+{
+  "benchmark": "pipeline",
+  "timestamp": "2026-10-08T04:29:37.001001+00:00",
+  "dataset": "sift10k",
+  "results": {
+    "govec": {
+      "run_position": 1,
+      "batch_insert": {
+        "total_s": 1.9534252920129802,
+        "per_vector_ms": 0.19534252920129802,
+        "calls": {
+          "mean_ms": 0.18855339129222556,
+          "p50_ms": 0.19232041493523866,
+          "p99_ms": 0.24965902825060765
+        }
+      },
+      "cold_start_loaded": {
+        "mean_ms": 235.89060000085738,
+        "p50_ms": 228.90924999956042,
+        "p99_ms": 298.91215353796724
+      },
+      "cold_start_empty": {
+        "mean_ms": 160.77111620106734,
+        "p50_ms": 162.2942910034908,
+        "p99_ms": 178.87109246774344
+      },
+      "single_insert": {
+        "total_s": 19.367973749991506,
+        "per_vector_ms": 1.9367973749991507,
+        "calls": {
+          "mean_ms": 1.9212631351649179,
+          "p50_ms": 1.9211045000702143,
+          "p99_ms": 2.87312084576115
+        }
+      },
+      "memory": {
+        "baseline": {
+          "disk_bytes": 256,
+          "disk_allocated_bytes": 4096,
+          "ram_bytes": 18392023,
+          "ram_process_bytes": 23191552,
+          "ram_file_cache_bytes": 8192
+        },
+        "delta_disk_bytes": 6523751,
+        "delta_disk_allocated_bytes": 6520832,
+        "ram_series": [
+          {
+            "t_s": 0,
+            "ram_bytes": 54557409,
+            "process_bytes": 58671104,
+            "file_cache_bytes": 6529024
+          },
+          {
+            "t_s": 60,
+            "ram_bytes": 54557409,
+            "process_bytes": 58675200,
+            "file_cache_bytes": 6529024
+          }
+        ],
+        "delta_ram_bytes_peak": 36165386,
+        "delta_ram_bytes_last_sample": 36165386
+      },
+      "queries": {
+        "k_1": {
+          "recall": {
+            "mean": 0.99,
+            "min": 0.0,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 1.9573633492109366,
+            "p50_ms": 1.8807914966600947,
+            "p99_ms": 3.1987006569397636
+          }
+        },
+        "k_5": {
+          "recall": {
+            "mean": 0.998,
+            "min": 0.8,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 1.859743769891793,
+            "p50_ms": 1.8370625111856498,
+            "p99_ms": 2.576644487999147
+          }
+        },
+        "k_10": {
+          "recall": {
+            "mean": 0.998,
+            "min": 0.8,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 2.070884149725316,
+            "p50_ms": 2.011208503972739,
+            "p99_ms": 3.1114347687980626
+          }
+        },
+        "k_50": {
+          "recall": {
+            "mean": 0.997,
+            "min": 0.96,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 2.189396230969578,
+            "p50_ms": 2.1502915042219684,
+            "p99_ms": 3.4133621699584182
+          }
+        }
+      },
+      "queries_grpc": {
+        "k_1": {
+          "recall": {
+            "mean": 0.99,
+            "min": 0.0,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 0.9690016401873436,
+            "p50_ms": 0.9778960011317395,
+            "p99_ms": 1.1992292615468614
+          }
+        },
+        "k_5": {
+          "recall": {
+            "mean": 0.998,
+            "min": 0.8,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 0.9988678990339395,
+            "p50_ms": 0.9534580021863803,
+            "p99_ms": 1.8366996674740221
+          }
+        },
+        "k_10": {
+          "recall": {
+            "mean": 0.998,
+            "min": 0.8,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 0.9843142105091829,
+            "p50_ms": 0.9802500062505715,
+            "p99_ms": 2.1107054024469107
+          }
+        },
+        "k_50": {
+          "recall": {
+            "mean": 0.997,
+            "min": 0.96,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 1.0712858798797242,
+            "p50_ms": 1.071354497980792,
+            "p99_ms": 1.4470182498916984
+          }
+        }
+      }
+    },
+    "govec-scalar": {
+      "run_position": 2,
+      "batch_insert": {
+        "total_s": 1.9272503749962198,
+        "per_vector_ms": 0.19272503749962197,
+        "calls": {
+          "mean_ms": 0.1858568123076111,
+          "p50_ms": 0.1838483350002207,
+          "p99_ms": 0.6032346374893678
+        }
+      },
+      "cold_start_loaded": {
+        "mean_ms": 192.99973320157733,
+        "p50_ms": 195.09333399764728,
+        "p99_ms": 197.7178249982535
+      },
+      "cold_start_empty": {
+        "mean_ms": 124.16551640199032,
+        "p50_ms": 124.03400000766851,
+        "p99_ms": 125.80289948091377
+      },
+      "single_insert": {
+        "total_s": 18.187369665989536,
+        "per_vector_ms": 1.8187369665989537,
+        "calls": {
+          "mean_ms": 1.8053224279574351,
+          "p50_ms": 1.8321454990655184,
+          "p99_ms": 2.7202474915247876
+        }
+      },
+      "memory": {
+        "baseline": {
+          "disk_bytes": 255,
+          "disk_allocated_bytes": 4096,
+          "ram_bytes": 20510146,
+          "ram_process_bytes": 22982656,
+          "ram_file_cache_bytes": 8192
+        },
+        "delta_disk_bytes": 2673207,
+        "delta_disk_allocated_bytes": 2670592,
+        "ram_series": [
+          {
+            "t_s": 0,
+            "ram_bytes": 45948600,
+            "process_bytes": 50085888,
+            "file_cache_bytes": 2678784
+          },
+          {
+            "t_s": 60,
+            "ram_bytes": 45822771,
+            "process_bytes": 48615424,
+            "file_cache_bytes": 2678784
+          }
+        ],
+        "delta_ram_bytes_peak": 25438454,
+        "delta_ram_bytes_last_sample": 25312625
+      },
+      "queries": {
+        "k_1": {
+          "recall": {
+            "mean": 0.96,
+            "min": 0.0,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 1.9772383505187463,
+            "p50_ms": 1.9274375008535571,
+            "p99_ms": 3.3035729300172534
+          }
+        },
+        "k_5": {
+          "recall": {
+            "mean": 0.952,
+            "min": 0.8,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 1.984217909630388,
+            "p50_ms": 1.9550000070012175,
+            "p99_ms": 3.0612861648842227
+          }
+        },
+        "k_10": {
+          "recall": {
+            "mean": 0.9390000000000001,
+            "min": 0.8,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 1.9079117095679976,
+            "p50_ms": 1.8960624947794713,
+            "p99_ms": 2.8027971637493465
+          }
+        },
+        "k_50": {
+          "recall": {
+            "mean": 0.9623999999999999,
+            "min": 0.86,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 2.109947049175389,
+            "p50_ms": 2.083603998471517,
+            "p99_ms": 3.3006084970838856
+          }
+        }
+      }
+    },
+    "chroma": {
+      "run_position": 3,
+      "batch_insert": {
+        "total_s": 2.2275073750060983,
+        "per_vector_ms": 0.22275073750060984,
+        "calls": {
+          "mean_ms": 0.21140482860355406,
+          "p50_ms": 0.20210645998304244,
+          "p99_ms": 0.36991114580305295
+        }
+      },
+      "cold_start_loaded": {
+        "mean_ms": 145.82239179580938,
+        "p50_ms": 146.4962089958135,
+        "p99_ms": 155.65321049944032
+      },
+      "cold_start_empty": {
+        "mean_ms": 164.5627247984521,
+        "p50_ms": 162.31291599979158,
+        "p99_ms": 170.04074852302438
+      },
+      "single_insert": {
+        "total_s": 66.8825703330076,
+        "per_vector_ms": 6.6882570333007605,
+        "calls": {
+          "mean_ms": 6.651649726081814,
+          "p50_ms": 6.650896000792272,
+          "p99_ms": 9.265683839475969
+        }
+      },
+      "memory": {
+        "baseline": {
+          "disk_bytes": 188416,
+          "disk_allocated_bytes": 192512,
+          "ram_bytes": 13463715,
+          "ram_process_bytes": 17879040,
+          "ram_file_cache_bytes": 192512
+        },
+        "delta_disk_bytes": 9199540,
+        "delta_disk_allocated_bytes": 9211904,
+        "ram_series": [
+          {
+            "t_s": 0,
+            "ram_bytes": 33774632,
+            "process_bytes": 39890944,
+            "file_cache_bytes": 9400320
+          },
+          {
+            "t_s": 60,
+            "ram_bytes": 34152120,
+            "process_bytes": 38096896,
+            "file_cache_bytes": 9400320
+          }
+        ],
+        "delta_ram_bytes_peak": 20310917,
+        "delta_ram_bytes_last_sample": 20688405
+      },
+      "queries": {
+        "k_1": {
+          "recall": {
+            "mean": 0.99,
+            "min": 0.0,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 2.7339800297340844,
+            "p50_ms": 2.7617710002232343,
+            "p99_ms": 3.5103462504048366
+          }
+        },
+        "k_5": {
+          "recall": {
+            "mean": 0.998,
+            "min": 0.8,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 2.8287246702529956,
+            "p50_ms": 2.77081249805633,
+            "p99_ms": 3.460464590898482
+          }
+        },
+        "k_10": {
+          "recall": {
+            "mean": 0.998,
+            "min": 0.8,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 2.9072975109738763,
+            "p50_ms": 2.8952295033377595,
+            "p99_ms": 3.5641186486463994
+          }
+        },
+        "k_50": {
+          "recall": {
+            "mean": 0.997,
+            "min": 0.96,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 3.1190432903531473,
+            "p50_ms": 3.1853334949119017,
+            "p99_ms": 3.702742493042024
+          }
+        }
+      }
+    },
+    "qdrant": {
+      "run_position": 0,
+      "batch_insert": {
+        "total_s": 1.1341995830007363,
+        "per_vector_ms": 0.11341995830007363,
+        "calls": {
+          "mean_ms": 0.09179566339880693,
+          "p50_ms": 0.08098333004454616,
+          "p99_ms": 0.5641043565046857
+        }
+      },
+      "cold_start_loaded": {
+        "mean_ms": 173.09647479851265,
+        "p50_ms": 172.68170799070504,
+        "p99_ms": 179.38668401067844
+      },
+      "cold_start_empty": {
+        "mean_ms": 145.14136659854557,
+        "p50_ms": 144.1454579908168,
+        "p99_ms": 173.48372851207387
+      },
+      "single_insert": {
+        "total_s": 16.96863766599563,
+        "per_vector_ms": 1.696863766599563,
+        "calls": {
+          "mean_ms": 1.6772286935796727,
+          "p50_ms": 1.5171039995038882,
+          "p99_ms": 4.10997124548885
+        }
+      },
+      "memory": {
+        "baseline": {
+          "disk_bytes": 357,
+          "disk_allocated_bytes": 20480,
+          "ram_bytes": 86633349,
+          "ram_process_bytes": 89976832,
+          "ram_file_cache_bytes": 8192
+        },
+        "delta_disk_bytes": 3079737587,
+        "delta_disk_allocated_bytes": 55726080,
+        "ram_series": [
+          {
+            "t_s": 0,
+            "ram_bytes": 199858585,
+            "process_bytes": 185643008,
+            "file_cache_bytes": 285233152
+          },
+          {
+            "t_s": 60,
+            "ram_bytes": 176685056,
+            "process_bytes": 145944576,
+            "file_cache_bytes": 22794240
+          }
+        ],
+        "delta_ram_bytes_peak": 113225236,
+        "delta_ram_bytes_last_sample": 90051707
+      },
+      "queries": {
+        "k_1": {
+          "recall": {
+            "mean": 0.99,
+            "min": 0.0,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 1.5164954197825864,
+            "p50_ms": 1.5014165037428029,
+            "p99_ms": 2.195228250056971
+          }
+        },
+        "k_5": {
+          "recall": {
+            "mean": 0.998,
+            "min": 0.8,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 2.0161091507179663,
+            "p50_ms": 1.923708499816712,
+            "p99_ms": 2.846415091189556
+          }
+        },
+        "k_10": {
+          "recall": {
+            "mean": 0.998,
+            "min": 0.8,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 2.328596238803584,
+            "p50_ms": 2.348604495637119,
+            "p99_ms": 3.572984990896657
+          }
+        },
+        "k_50": {
+          "recall": {
+            "mean": 0.998,
+            "min": 0.96,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 2.70775294964551,
+            "p50_ms": 2.531478996388614,
+            "p99_ms": 4.813701250968734
+          }
+        }
+      }
+    }
+  }
+}

@@ -15,8 +15,9 @@ wheels/
 # downloaded datasets (regenerated via scripts/download_datasets.py)
 data/
 
-# benchmark output (regenerated via task bench:*)
-results/
+# benchmark output (regenerated via task bench:*), except the runs behind the README's tables
+results/*
+!results/published/
 
 # agent tooling and local scratch
 .agents/
