@@ -163,16 +163,17 @@ Two datasets, chosen with `DATASET=sift` (the default) or `DATASET=dbpedia`:
 | GoVec | `ghcr.io/pradyothsp/govec:0.2.1` | HNSW, `M=16`, `ef_construction=100`, `ef_search=100`, cosine (set in `govec-config.yaml`) |
 | GoVec (int8) | the same, with `quantization: scalar` | as above, vectors stored as int8 |
 | Chroma | Chroma 1.4.4, pinned by digest | HNSW, its defaults (`M=16`, `ef_construction=100`, `ef_search=100`), cosine |
-| Qdrant | `qdrant/qdrant:v1.19.0` | HNSW, its defaults (`m=16`, `ef_construct=100`, search ef 100), cosine; `indexing_threshold` lowered (below) |
+| Qdrant | `qdrant/qdrant:v1.19.0` | HNSW, its defaults (`m=16`, `ef_construct=100`, search ef 100), cosine; `indexing_threshold` and `full_scan_threshold` lowered (below) |
 
 - **Same limits:** 2 CPUs and 2 GB per container (`docker-compose.yml`).
 - **One database at a time:** each benchmark starts only the container it measures, on fresh
   volumes.
 - **Search ef set explicitly** to 100 for every database, though it is each one's default.
 - **Stock settings** apart from matching HNSW parameters and the metric, with one exception:
-  Qdrant's indexing threshold is lowered so it builds an HNSW index at all. On stock settings it
-  leaves segments under 10 MB unindexed and searches them by brute force: all of SIFT 10k, and
-  15% of DBpedia 10k.
+  Qdrant's two thresholds for building and using its HNSW index are lowered so it always does.
+  On stock settings it leaves segments under 10 MB unindexed and searches them by brute force:
+  all of SIFT 10k, and 15% of DBpedia 10k. `indexing_threshold` is set to 1 KB (0 would turn
+  indexing off), and `full_scan_threshold` to 10 KB, the API's minimum.
 - **Same client behaviour:** every adapter reuses one connection; GoVec is driven by its
   published Python SDK over REST, as are Chroma and Qdrant through their official clients
   (GoVec and Qdrant also over gRPC, in rows marked ‖).
