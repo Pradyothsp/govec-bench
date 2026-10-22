@@ -25,6 +25,12 @@ tasks:
       - data-download
     cmd: uv run python -m scripts.download_datasets --dataset {{.DATASET | default "sift"}}
 
+  data:export:
+    desc: Write a dataset and its exact answers as fvecs/ivecs for govec's Go benchmarks (DATASET=dbpedia, the default, or sift; SIZE=small or large)
+    aliases:
+      - data-export
+    cmd: uv run python -m scripts.export_dataset --dataset {{.DATASET | default "dbpedia"}} --size {{.SIZE | default "small"}}
+
   docker:up:
     desc: Start the comparison vector DBs (Chroma, ...) via Docker Compose
     aliases:

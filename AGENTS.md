@@ -21,6 +21,7 @@ several "GoVec wins" here have turned out to be measurement errors.
 |---|---|
 | `uv sync --all-groups` | Set up the environment |
 | `task data:download` | Fetch SIFT10K and SIFT1M (SIFT100K is its first 100k vectors); `DATASET=dbpedia` for the text embeddings |
+| `task data:export` | Write DBpedia 10k (`SIZE=large`: 100k) as fvecs/ivecs with its exact top-100 to `data/export/<name>/`, for GoVec's in-repo Go benchmarks (`GOVEC_BENCH_DATA=<that dir>`); `DATASET=sift` for SIFT |
 | `task docker:up` / `task docker:down` | Start / stop all databases, for manual poking; benchmarks start their own |
 | `task bench:all` | Run all five benchmarks; each writes `results/<benchmark>_<timestamp>.json`. `DATASET=dbpedia` switches dataset |
 | `task bench:insert` (`query`, `recall`, `memory`, `coldstart`) | Run one benchmark; `-- --db govec --db qdrant` runs only those databases |
