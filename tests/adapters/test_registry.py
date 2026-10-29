@@ -43,4 +43,4 @@ def test_databases__grpc_client__every_database_with_a_grpc_api_has_one() -> Non
     with_grpc = [name for name, database in DATABASES.items() if database.build_grpc_adapter is not None]
 
     # Assert
-    assert with_grpc == ["govec", "qdrant"]
+    assert with_grpc == ["govec", "govec-mmap", "qdrant"]

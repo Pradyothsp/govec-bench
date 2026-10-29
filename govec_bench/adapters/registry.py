@@ -36,11 +36,14 @@ DATABASES: dict[str, Database] = {
     "govec-scalar": Database(partial(GovecAdapter, port=9699), GOVEC_DISK_PATHS),
     # GoVec again with vectors in memory-mapped files (govec-config-mmap.yaml), to measure what
     # moving them out of the Go heap costs and saves.
+    # It also answers over gRPC: Qdrant keeps dense vectors memory-mapped by default (v1.19's
+    # "cached" tier), so this, over gRPC, is GoVec's like-for-like comparison with stock Qdrant.
     "govec-mmap": Database(
         partial(GovecAdapter, port=9700),
         (*GOVEC_DISK_PATHS, "/data/govec_mmap"),
         needs_dimensions=True,
         opt_in=True,
+        build_grpc_adapter=partial(GovecAdapter, port=9702, protocol="grpc"),
     ),
     "chroma": Database(ChromaAdapter, ("/data",)),
     "qdrant": Database(QdrantAdapter, ("/qdrant/storage",), build_grpc_adapter=partial(QdrantAdapter, grpc=True)),

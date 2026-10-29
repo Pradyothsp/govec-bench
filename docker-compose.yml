@@ -48,6 +48,7 @@ services:
     container_name: govec-bench-govec-mmap
     ports:
       - "9700:9697"
+      - "9702:9698" # gRPC, for the pipeline's REST-vs-gRPC query latency step
     volumes:
       - ./govec-config-mmap.yaml:/app/config.yaml:ro
     healthcheck:
