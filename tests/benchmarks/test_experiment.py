@@ -1,4 +1,5 @@
 import json
+import os
 import random
 from contextlib import closing
 from pathlib import Path
@@ -6,8 +7,16 @@ from pathlib import Path
 import pytest
 
 from govec_bench.benchmarks import experiment as experiment_module
-from govec_bench.benchmarks.experiment import Session, parse_experiment, plan, round_order, run_rounds
+from govec_bench.benchmarks.experiment import (
+    Session,
+    find_session_folder,
+    parse_experiment,
+    plan,
+    round_order,
+    run_rounds,
+)
 from govec_bench.benchmarks.pipeline import Workload
+from govec_bench.events import read_events
 from govec_bench.store import connect
 
 AB = """
@@ -99,11 +108,12 @@ def test_run_rounds__each_arm_each_round__a_results_file_and_the_session_says_wh
 ) -> None:
     # Arrange
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(experiment_module, "wait_for_disk", lambda: True)
+    monkeypatch.setattr(experiment_module, "wait_for_disk", lambda _warn: True)
     measured: list[tuple[str | None, int]] = []
 
-    def fake_measure(database, workload, position):  # noqa: ARG001
+    def fake_measure(database, workload, position, progress):  # noqa: ARG001
         measured.append((database.image_ref, position))
+        progress("step", "batch insert")
         if database.image_ref == "HEAD" and len(measured) > 2:
             return {"run_position": position, "error": "TimeoutError: slow"}
         return {"run_position": position, "batch_insert": {"per_vector_ms": 0.5}}
@@ -119,6 +129,7 @@ def test_run_rounds__each_arm_each_round__a_results_file_and_the_session_says_wh
     # Act
     run_rounds(session, rounds, workload, "dbpedia100k")
     state = json.loads((directory / "session.json").read_text())
+    events, _ = read_events(directory / "events.jsonl")
     with closing(connect(tmp_path / "results" / "bench.db")) as db:
         indexed = db.execute(
             "SELECT experiment, session, round, arm, position FROM runs ORDER BY round, position"
@@ -149,3 +160,68 @@ def test_run_rounds__each_arm_each_round__a_results_file_and_the_session_says_wh
         ("ab", "session", 2, "new", 0),
         ("ab", "session", 2, "old", 1),
     ]
+    assert [(event.kind, event.arm, event.text or event.status) for event in events[:4]] == [
+        ("round", None, None),
+        ("arm", "old", None),
+        ("step", "old", "batch insert"),
+        ("result", "old", "done"),
+    ]
+    assert events[-1].file == "r2-old.json"
+
+
+def test_logged_to__echo_off__output_in_run_log_only(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    # Arrange
+    path = tmp_path / "run.log"
+
+    # Act
+    with experiment_module.logged_to(path, echo=False):
+        print("batch insert...")  # noqa: T201 -- what the runner prints
+
+    # Assert
+    assert path.read_text() == "batch insert...\n"
+    assert capsys.readouterr().out == ""
+
+
+def _session_folder(sessions: Path, name: str, status: str, pid: int | None) -> Path:
+    folder = sessions / name
+    folder.mkdir(parents=True)
+    (folder / "session.json").write_text(json.dumps({"status": status, "pid": pid}))
+    return folder
+
+
+def test_find_session_folder__nothing_named__the_newest_still_running(tmp_path: Path) -> None:
+    # Arrange
+    _session_folder(tmp_path, "ab/20261029T010000Z", "running", os.getpid())
+    newest = _session_folder(tmp_path, "hint/20261030T010000Z", "running", os.getpid())
+    _session_folder(tmp_path, "hint/20261030T020000Z", "done", os.getpid())
+    _session_folder(tmp_path, "hint/20261030T030000Z", "running", None)  # its runner died
+
+    # Act
+    folder = find_session_folder(None, tmp_path)
+
+    # Assert
+    assert folder == newest
+
+
+def test_find_session_folder__experiment_name__its_newest_session(tmp_path: Path) -> None:
+    # Arrange
+    _session_folder(tmp_path, "ab/20261029T010000Z", "done", None)
+    newest = _session_folder(tmp_path, "ab/20261030T010000Z", "done", None)
+
+    # Act
+    folders = [find_session_folder(text, tmp_path) for text in ("ab", "ab/20261030T010000Z", str(newest))]
+
+    # Assert
+    assert folders == [newest, newest, newest]
+
+
+def test_find_session_folder__nothing_running__says_so(tmp_path: Path) -> None:
+    # Arrange
+    _session_folder(tmp_path, "ab/20261029T010000Z", "done", None)
+
+    # Act
+    with pytest.raises(SystemExit) as raised:
+        find_session_folder(None, tmp_path)
+
+    # Assert
+    assert "no session is running" in str(raised.value)

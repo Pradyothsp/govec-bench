@@ -108,6 +108,12 @@ tasks:
       - bench-run
     cmd: uv run python -m govec_bench.cli run {{.EXPERIMENT}} {{.CLI_ARGS}}
 
+  bench:ui:
+    desc: Watch the session running, or browse experiment sessions when none is (-- --live <experiment> for one experiment)
+    aliases:
+      - bench-ui
+    cmd: uv run python -m govec_bench.cli ui {{.CLI_ARGS}}
+
   results:import:
     desc: Index results files into results/bench.db (default results/; pass folders after --, e.g. -- ../govec-notes/bench)
     aliases:

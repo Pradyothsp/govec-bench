@@ -207,7 +207,8 @@ A comparison run over several rounds in one session (a GoVec release against a n
 is a file in `experiments/`, run with `task bench:run EXPERIMENT=<name>`: each round runs every
 arm through the pipeline, in an order that alternates between rounds, and the session's files go in
 `results/sessions/`. `task results:compare SESSION=<name>` then gives each arm's median and range
-per metric, the change, and whether every run was better or the runs overlap.
+per metric, the change, and whether every run was better or the runs overlap. In a terminal, `bench:run`
+shows the session live, and `task bench:ui` browses every session with a plot of each metric's runs.
 
 ## Run-to-run variation
 

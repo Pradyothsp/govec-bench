@@ -241,11 +241,6 @@ def summary_text(summary: Summary | None, unit: Unit) -> str:
     return f"{formatted(summary.median, unit)} ({formatted(summary.low, unit)}–{formatted(summary.high, unit)})"  # noqa: RUF001 -- a range
 
 
-def _label(metric: Metric) -> str:
-    unit = {"ms": " (ms)", "bytes": " (MB)"}.get(metric.unit, "")
-    return metric.label + unit
-
-
 def select_metrics(arms: Iterable[ArmData], patterns: Sequence[str], *, every: bool) -> list[Metric]:
     if not patterns and not every:
         return list(HEADLINE)
@@ -273,12 +268,108 @@ def _summary_of(arm: ArmData | None, metric: Metric) -> Summary | None:
     return summarize(values) if values else None
 
 
-def _change_text(control: Summary | None, other: Summary | None, metric: Metric) -> str:
+class Change(NamedTuple):
+    moved: float | None  # the median's relative change; None against a median of 0
+    verdict: str
+
+
+def change_of(control: Summary | None, other: Summary | None, metric: Metric) -> Change | None:
     if control is None or other is None:
+        return None
+    return Change(change(control, other), verdict(control, other, metric.better))
+
+
+class Row(NamedTuple):
+    # One metric of a comparison: a summary per column, and a change for each compared column.
+    metric: Metric
+    summaries: dict[str, Summary | None]  # by arm, or "baseline" and "session"
+    changes: dict[str, Change | None]  # by the arm compared with the control, or "session"
+
+
+def session_rows(arms: dict[str, ArmData], control: str, metrics: Sequence[Metric]) -> list[Row]:
+    rows = []
+    for metric in metrics:
+        summaries = {name: _summary_of(arm, metric) for name, arm in arms.items()}
+        if any(summaries.values()):
+            changes = {
+                name: change_of(summaries[control], summary, metric)
+                for name, summary in summaries.items()
+                if name != control
+            }
+            rows.append(Row(metric, summaries, changes))
+    return rows
+
+
+class BaselineMatch(NamedTuple):
+    arm: str
+    baseline: ArmData | None  # None when the baseline has nothing for this arm
+    same_setup: bool  # same image and settings in both: the change is the sessions, not the code
+    rows: list[Row]
+
+
+def baseline_matches(
+    arms: dict[str, ArmData], reference: dict[str, ArmData], *, by_database: bool, metrics: Sequence[Metric]
+) -> list[BaselineMatch]:
+    matches = []
+    for arm in arms.values():
+        match = reference.get(arm.database if by_database else arm.name)
+        rows = []
+        for metric in metrics if match else ():
+            before, after = _summary_of(match, metric), _summary_of(arm, metric)
+            if before is not None or after is not None:
+                rows.append(
+                    Row(metric, {"baseline": before, "session": after}, {"session": change_of(before, after, metric)})
+                )
+        matches.append(BaselineMatch(arm.name, match, match is not None and same_setup(arm, match), rows))
+    return matches
+
+
+def with_baseline(rows: Sequence[Row], matches: Sequence[BaselineMatch]) -> list[Row]:
+    # The session's rows with a change per arm against the baseline, after the session's own.
+    against = {(match.arm, row.metric.name): row.changes["session"] for match in matches for row in match.rows}
+    return [
+        row._replace(
+            changes={
+                **row.changes,
+                **{baseline_column(match.arm): against.get((match.arm, row.metric.name)) for match in matches},
+            }
+        )
+        for row in rows
+    ]
+
+
+def baseline_column(arm: str) -> str:
+    return f"{arm} vs baseline"
+
+
+class Baseline(NamedTuple):
+    name: str
+    arms: dict[str, ArmData]
+    by_database: bool  # the published runs are matched to arms by database, a session by arm name
+
+
+def load_baseline(db: sqlite3.Connection, baseline: str, dataset: str) -> Baseline:
+    if baseline == PUBLISHED:
+        return Baseline(f"the published runs ({dataset})", load_published(db, dataset), by_database=True)
+
+    key = resolve_session(db, baseline)
+    _, arms = load_session(db, key)
+    return Baseline(f"{key.experiment}/{key.session}", arms, by_database=False)
+
+
+# --- Text --------------------------------------------------------------------------------
+
+
+def change_text(item: Change | None) -> str:
+    if item is None:
         return ""
-    moved = change(control, other)
-    moved_text = f"{moved:+.1%}" if moved is not None else ""
-    return f"{moved_text:>7}  {verdict(control, other, metric.better)}"
+    moved = f"{item.moved:+.1%}" if item.moved is not None else ""
+    return f"{moved:>7}  {item.verdict}"
+
+
+def label_of(metric: Metric) -> str:
+    unit = {"ms": " (ms)", "bytes": " (MB)"}.get(metric.unit, "")
+    return metric.label + unit
 
 
 def _table(header: Sequence[str], rows: Sequence[Sequence[str]]) -> list[str]:
@@ -298,56 +389,37 @@ def arms_line(arms: dict[str, ArmData]) -> str:
     return "arms: " + "; ".join(parts)
 
 
+def _text_rows(rows: Sequence[Row]) -> list[list[str]]:
+    return [
+        [
+            label_of(row.metric) + (" !" if row.metric.caution else ""),
+            *(summary_text(summary, row.metric.unit) for summary in row.summaries.values()),
+            *(change_text(item) for item in row.changes.values()),
+        ]
+        for row in rows
+    ]
+
+
 def session_report(arms: dict[str, ArmData], control: str, metrics: Sequence[Metric]) -> list[str]:
-    others = [name for name in arms if name != control]
-    header = ["", *arms, *(f"{name} vs {control}" for name in others)]
-    rows = []
-    cautions = []
-    for metric in metrics:
-        summaries = {name: _summary_of(arm, metric) for name, arm in arms.items()}
-        if not any(summaries.values()):
-            continue
-        label = _label(metric) + (" !" if metric.caution else "")
-        rows.append(
-            [
-                label,
-                *(summary_text(summary, metric.unit) for summary in summaries.values()),
-                *(_change_text(summaries[control], summaries[name], metric) for name in others),
-            ]
-        )
-        if metric.caution:
-            cautions.append(f"! {metric.label.strip()}: {metric.caution}")
-    return [*_table(header, rows), *cautions]
+    rows = session_rows(arms, control, metrics)
+    header = ["", *arms, *(f"{name} vs {control}" for name in arms if name != control)]
+    cautions = [f"! {row.metric.label.strip()}: {row.metric.caution}" for row in rows if row.metric.caution]
+    return [*_table(header, _text_rows(rows)), *cautions]
 
 
-def baseline_report(
-    arms: dict[str, ArmData], baseline: dict[str, ArmData], *, by_database: bool, metrics: Sequence[Metric]
-) -> list[str]:
+SAME_SETUP_NOTE = "same image and settings: this change is the sessions, not the code"
+
+
+def baseline_report(arms: dict[str, ArmData], baseline: Baseline, metrics: Sequence[Metric]) -> list[str]:
     lines = []
-    for arm in arms.values():
-        match = baseline.get(arm.database if by_database else arm.name)
-        if match is None:
-            lines.append(f"{arm.name}: nothing to compare in the baseline")
+    for match in baseline_matches(arms, baseline.arms, by_database=baseline.by_database, metrics=metrics):
+        if match.baseline is None:
+            lines.append(f"{match.arm}: nothing to compare in the baseline")
             continue
 
-        same = same_setup(arm, match)
-        note = " (same image and settings: this change is the sessions, not the code)" if same else ""
-        rows = []
-        for metric in metrics:
-            before, after = _summary_of(match, metric), _summary_of(arm, metric)
-            if before is None and after is None:
-                continue
-            rows.append(
-                [
-                    _label(metric),
-                    summary_text(before, metric.unit),
-                    summary_text(after, metric.unit),
-                    _change_text(before, after, metric),
-                ]
-            )
-        lines.extend(
-            [f"{arm.name}{note}", *_table(["", f"baseline ({match.runs})", f"session ({arm.runs})", ""], rows), ""]
-        )
+        note = f" ({SAME_SETUP_NOTE})" if match.same_setup else ""
+        header = ["", f"baseline ({match.baseline.runs})", f"session ({arms[match.arm].runs})", ""]
+        lines.extend([f"{match.arm}{note}", *_table(header, _text_rows(match.rows)), ""])
     return lines
 
 
@@ -372,15 +444,68 @@ def compare(
     lines.extend(session_report(arms, control, metrics))
 
     if baseline:
-        by_database = baseline == PUBLISHED
-        if by_database:
-            reference = load_published(db, dataset)
-            name = f"the published runs ({dataset})"
-        else:
-            base_key = resolve_session(db, baseline)
-            _, reference = load_session(db, base_key)
-            name = f"{base_key.experiment}/{base_key.session}"
-        lines.extend(["", f"Against {name}:", ""])
-        lines.extend(baseline_report(arms, reference, by_database=by_database, metrics=metrics))
+        reference = load_baseline(db, baseline, dataset)
+        lines.extend(["", f"Against {reference.name}:", ""])
+        lines.extend(baseline_report(arms, reference, metrics))
 
     return lines
+
+
+# --- For browsing: every session, one metric's runs, its history ------------------------
+
+
+class SessionInfo(NamedTuple):
+    key: SessionKey
+    dataset: str
+    runs: int
+    failed: int
+    started: str  # the first run's timestamp
+
+
+def list_sessions(db: sqlite3.Connection) -> list[SessionInfo]:
+    # Newest first.
+    rows = db.execute(
+        "SELECT r.experiment, r.session, r.dataset, count(DISTINCT r.id), count(e.error), min(r.timestamp) "
+        "FROM runs r JOIN entries e ON e.run_id = r.id WHERE r.experiment IS NOT NULL "
+        "GROUP BY r.experiment, r.session ORDER BY min(r.timestamp) DESC"
+    )
+    return [
+        SessionInfo(SessionKey(experiment, session), dataset, runs, failed, started or "")
+        for experiment, session, dataset, runs, failed, started in rows
+    ]
+
+
+class RunValue(NamedTuple):
+    arm: str
+    round: int
+    position: int
+    value: float
+    label: str  # the results file's name
+
+
+def run_values(db: sqlite3.Connection, key: SessionKey, metric: str) -> list[RunValue]:
+    rows = db.execute(
+        "SELECT r.arm, r.round, r.position, m.value, r.label FROM runs r JOIN metrics m ON m.run_id = r.id "
+        "WHERE r.experiment = ? AND r.session = ? AND m.metric = ? ORDER BY r.round, r.position",
+        (*key, metric),
+    )
+    return [RunValue(*row) for row in rows]
+
+
+class HistoryPoint(NamedTuple):
+    session: str
+    arm: str
+    summary: Summary
+
+
+def history(db: sqlite3.Connection, experiment: str, metric: str) -> list[HistoryPoint]:
+    # Each arm's median and range in every session of an experiment, oldest first.
+    rows = db.execute(
+        "SELECT r.session, r.arm, m.value FROM runs r JOIN metrics m ON m.run_id = r.id "
+        "WHERE r.experiment = ? AND m.metric = ? ORDER BY r.session, r.round, r.position",
+        (experiment, metric),
+    )
+    values: dict[tuple[str, str], list[float]] = {}
+    for session, arm, value in rows:
+        values.setdefault((session, arm), []).append(value)
+    return [HistoryPoint(session, arm, summarize(points)) for (session, arm), points in values.items()]

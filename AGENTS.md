@@ -29,7 +29,8 @@ several "GoVec wins" here have turned out to be measurement errors.
 | `task bench:sweep` | Recall@k against query latency per search ef (`-- --ef 50 --ef 100 --k 10` to narrow); GoVec, Chroma and Qdrant unless `--db` says otherwise (`--db govec-scalar` adds int8); not part of `bench:all` |
 | `task bench:insert -- --db govec --set hnsw_ef_construction=200` | Any benchmark with a GoVec setting changed for one run: a key of `govec-config.yaml` as its `GOVEC_` variable without the prefix; repeat `--set` for several. Here `ef_construction=200`, GoVec's default up to 0.2.0 |
 | `task bench:pipeline -- --db govec-mmap --govec HEAD` | Run GoVec from a commit of the GoVec repo (`../govec`, or `GOVEC_REPO`) instead of the pin: built once from a clean copy, tagged `govec-bench/govec:<commit>`. Any image works too (`--govec govec:local`, `--govec ghcr.io/pradyothsp/govec:0.2.1`). For development comparisons; published numbers use the pin |
-| `task bench:run EXPERIMENT=mmap-0.2.1-vs-head` | Run an experiment from `experiments/`: arms (a database, and for GoVec an image or commit and settings) run through the whole pipeline in rounds, the order alternating or shuffled between rounds. It starts Docker, builds images and the workload before round 1, keeps the Mac awake and waits for Docker's disk between 100k runs. One session's results files, `session.json` and `run.log` go in `results/sessions/<experiment>/<started>/`. `-- --dry-run` shows the plan and each arm's commit; `-- --rounds 1` overrides the file |
+| `task bench:run EXPERIMENT=mmap-0.2.1-vs-head` | Run an experiment from `experiments/`: arms (a database, and for GoVec an image or commit and settings) run through the whole pipeline in rounds, the order alternating or shuffled between rounds. It starts Docker, builds images and the workload before round 1, keeps the Mac awake and waits for Docker's disk between 100k runs. One session's results files, `session.json`, `events.jsonl` and `run.log` go in `results/sessions/<experiment>/<started>/`. In a terminal it opens the live view and runs the session in a process of its own: `q` leaves the run going, `s` twice stops it as Ctrl-C would. `-- --plain` prints instead; `-- --baseline published` adds a baseline to the live table; `-- --dry-run` shows the plan and each arm's commit; `-- --rounds 1` overrides the file |
+| `task bench:ui` | The newest session still running, live; with none running, browse sessions: the comparison `results:compare` prints, a baseline picker, a dot per run for the highlighted metric (`h`: its median in every session of the experiment), Enter for the metric's runs, `a` for every metric. `-- --live <experiment>` opens that experiment's newest session live instead |
 | `task results:compare SESSION=mmap-0.2.1-vs-head` | What a session found: per metric, each arm's median and range, the change against the control (round 1's first arm, or `--control`) and a verdict that says better only when every run beat every control run (`level` under 1%). Headline metrics by default; `--metric 'queries_grpc.*'` or `--all` for more. `--baseline <session>` or `--baseline published` adds each arm against that, marking arms that ran the same image and settings in both, since their change is the sessions' drift. SESSION is an experiment (its latest session), `experiment/session` or a session folder |
 | `task results:import` | Index results files into `results/bench.db` (each benchmark also indexes its own file as it writes it); `-- ../govec-notes/bench` adds older sessions. Safe to repeat: a file already indexed, from anywhere, is skipped |
 | `task results:runs` | List indexed runs, newest first, with what each database ran as; `-- --benchmark pipeline --database govec-mmap` to narrow |
@@ -64,9 +65,12 @@ govec_bench/
   results.py           latency/recall statistics and the JSON results writer, which also indexes each file
   results_file.py      a results file's shape, as TypedDicts: what each database ran as, the run's tag
   compare.py           bench compare: a session's arms per metric, from bench.db; HEADLINE is its rows
+  events.py            events.jsonl: what a running session is doing (round, arm, step, warnings)
+  tui/                 the terminal app (Textual): browse.py over bench.db, live.py over a session's
+                       folder (events, session.json, run.log), so it never talks to the runner
   store.py             results/bench.db: every results file as rows (runs, what each database ran as,
                        one row per metric under a dotted name); an index over the JSON, rebuildable
-  cli.py               the bench commands (python -m govec_bench.cli): import, runs, run, compare
+  cli.py               the bench commands (python -m govec_bench.cli): import, runs, run, compare, ui
 docker-compose.yml     one service per engine, pinned images, 2 CPU / 2 GB each
 databases.yaml         every database by name: its engine and the settings it changes (GOVEC_ variables)
 experiments/           comparisons as files, for bench run: arms, rounds, order, dataset and size
@@ -86,6 +90,10 @@ govec-config.yaml      GoVec's config; each GoVec database changes it through en
 - **One database at a time.** Every benchmark starts only the container it measures, on fresh
   volumes, and removes it afterwards (`running_alone()`). Idle neighbours still compact,
   optimize and collect garbage, and four 2-CPU containers claim every core of an 8-core laptop.
+- **Watch a session the same way in every session you compare.** The live view runs on the Mac
+  beside the benchmark client: a redraw a second, and `docker stats` every 10 s. Its effect on
+  latency hasn't been measured, so compare live-view sessions with live-view sessions (or run
+  both `--plain`), and measure it before mixing them.
 - **Stock settings unless the comparison needs otherwise.** HNSW parameters are matched where
   they're comparable (`M=16`, cosine). Anything tuned for one database only (e.g. `GOMEMLIMIT`
   for GoVec) stays off, with a comment saying why.

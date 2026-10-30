@@ -32,7 +32,7 @@ import shutil
 import subprocess
 import sys
 import time
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -53,6 +53,7 @@ from govec_bench.benchmarks.common import (
 from govec_bench.benchmarks.images import describe_govec_ref, resolve_govec_image
 from govec_bench.benchmarks.pipeline import Workload, build_workload, measure_database
 from govec_bench.datasets.registry import DATASETS, SIZES, Size
+from govec_bench.events import Event, EventLog
 from govec_bench.results import RESULTS_DIR, write_results
 from govec_bench.results_file import RunTag
 
@@ -204,29 +205,30 @@ def log(message: str) -> None:
 
 
 class _Tee:
-    # Writes to the terminal and the session's run.log, flushing each write, so a night's output
-    # is on disk as it happens.
-    def __init__(self, terminal: TextIO, file: TextIO) -> None:
+    # Writes to the session's run.log and, unless the live view is showing it, the terminal,
+    # flushing each write, so a night's output is on disk as it happens.
+    def __init__(self, terminal: TextIO, file: TextIO, *, echo: bool) -> None:
         self.terminal, self.file = terminal, file
+        self.streams = (terminal, file) if echo else (file,)
 
     def write(self, text: str) -> int:
-        for stream in (self.terminal, self.file):
+        for stream in self.streams:
             stream.write(text)
             stream.flush()
         return len(text)
 
     def flush(self) -> None:
-        self.terminal.flush()
-        self.file.flush()
+        for stream in self.streams:
+            stream.flush()
 
     def isatty(self) -> bool:
         return self.terminal.isatty()
 
 
 @contextlib.contextmanager
-def logged_to(path: Path) -> Iterator[None]:
+def logged_to(path: Path, *, echo: bool = True) -> Iterator[None]:
     with path.open("a") as file:
-        out, err = _Tee(sys.stdout, file), _Tee(sys.stderr, file)
+        out, err = _Tee(sys.stdout, file, echo=echo), _Tee(sys.stderr, file, echo=echo)
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             yield
 
@@ -273,14 +275,14 @@ def ensure_docker() -> None:
     time.sleep(DOCKER_SETTLE_S)
 
 
-def wait_for_disk() -> bool:
+def wait_for_disk(warn: Callable[[str], None] = log) -> bool:
     deadline = time.monotonic() + DISK_WAIT_S
     while short := shortfalls(free_space(), DISK_WAIT_BYTES):
         if time.monotonic() > deadline:
             return False
         details = "; ".join(f"{space.where} has {space.free_bytes / 1000**3:.1f} GB free" for space in short)
-        log(
-            f"  {details} (needs {DISK_WAIT_BYTES / 1000**3:.0f}); waiting {DISK_POLL_S} s for Docker to give space back"
+        warn(
+            f"{details} (needs {DISK_WAIT_BYTES / 1000**3:.0f}); waiting {DISK_POLL_S} s for Docker to give space back"
         )
         time.sleep(DISK_POLL_S)
     return True
@@ -374,14 +376,17 @@ class SessionRecord:
     finished: str | None = None
     status: SessionStatus = "running"
     runs: list[ArmRun] = field(default_factory=list)
+    pid: int = field(default_factory=os.getpid)  # the runner's, so a live view can stop it
 
 
 class Session:
-    # session.json, rewritten after every run, so an interrupted night still says what it did.
+    # session.json, rewritten after every run, so an interrupted night still says what it did;
+    # events.jsonl, appended as things happen, for the live view.
     def __init__(self, experiment: Experiment, directory: Path, rounds: list[list[str]]) -> None:
         self.experiment = experiment
         self.directory = directory
         self.path = directory / "session.json"
+        self.events = EventLog(directory)
         self.record = SessionRecord(
             experiment=experiment.name,
             description=experiment.description,
@@ -401,10 +406,15 @@ class Session:
         self.record.runs.append(run)
         self.save()
 
+    def warn(self, text: str) -> None:
+        log(f"  {text}")
+        self.events.emit(Event("warning", text=text))
+
     def finish(self, status: SessionStatus) -> None:
         self.record.status = status
         self.record.finished = _now()
         self.save()
+        self.events.emit(Event("end", status=status))
 
     def save(self) -> None:
         self.path.write_text(json.dumps(asdict(self.record), indent=2))
@@ -416,17 +426,22 @@ def run_arm(
     experiment = session.experiment
     database = arm.database
     run = ArmRun(round=round_number, arm=arm.name, position=position, started=_now())
+    session.events.emit(Event("arm", round=round_number, arm=arm.name, position=position))
 
-    if experiment.size == "large" and not wait_for_disk():
+    if experiment.size == "large" and not wait_for_disk(session.warn):
         run.status = "skipped"
         run.error = f"the disk stayed below {DISK_WAIT_BYTES / 1000**3:.0f} GB free for {DISK_WAIT_S // 60} minutes"
-        log(f"  SKIPPED {arm.name}: {run.error}")
+        session.warn(f"skipped {arm.name}: {run.error}")
         session.add(run)
+        session.events.emit(Event("result", round=round_number, arm=arm.name, status=run.status))
         return
+
+    def progress(kind: Literal["stage", "step"], label: str) -> None:
+        session.events.emit(Event(kind, round=round_number, arm=arm.name, text=label))
 
     # An arm that fails before its container starts mustn't be recorded as the last one that did.
     STARTED.pop(database.name, None)
-    payload = measure_database(database, workload, position)
+    payload = measure_database(database, workload, position, progress)
 
     path = write_results(
         benchmark="pipeline",
@@ -447,14 +462,16 @@ def run_arm(
         log(f"  {arm.name} done -> {path.name}")
     else:
         run.status, run.error = "failed", str(error)
-        log(f"  {arm.name} failed partway ({error}) -> {path.name}")
+        session.warn(f"{arm.name} failed partway ({error}) -> {path.name}")
     session.add(run)
+    session.events.emit(Event("result", round=round_number, arm=arm.name, status=run.status, file=path.name))
 
 
 def run_rounds(session: Session, rounds: list[list[str]], workload: Workload, dataset_name: str) -> None:
     arms = {arm.name: arm for arm in session.experiment.arms}
     for number, order in enumerate(rounds, start=1):
         log(f"round {number} of {len(rounds)}: {', '.join(order)}")
+        session.events.emit(Event("round", round=number))
         for position, name in enumerate(order):
             log(f"  {name}:")
             run_arm(
@@ -479,28 +496,92 @@ def describe(experiment: Experiment, rounds: list[list[str]]) -> None:
         print(f"  round {number}: {', '.join(order)}")
 
 
-def run_experiment(experiment: Experiment, rounds: int | None = None, *, dry_run: bool = False) -> Path | None:
+def session_directory(experiment: Experiment) -> Path:
+    return SESSIONS_DIR / experiment.name / datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+
+
+def runner_alive(pid: int | None) -> bool:
+    if pid is None:
+        return False
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def _is_running(folder: Path) -> bool:
+    try:
+        record = json.loads((folder / "session.json").read_text())
+    except OSError, ValueError:
+        return False
+    if record.get("status") != "running":
+        return False
+    pid = record.get("pid")
+    return isinstance(pid, int) and runner_alive(pid)
+
+
+def running_sessions(sessions: Path = SESSIONS_DIR) -> list[Path]:
+    # Sessions whose runner is still going, newest first (a folder is named for when it started).
+    folders = (path.parent for path in sessions.glob("*/*/session.json"))
+    return sorted((folder for folder in folders if _is_running(folder)), key=lambda folder: folder.name, reverse=True)
+
+
+def find_session_folder(text: str | None, sessions: Path = SESSIONS_DIR) -> Path:
+    # The session to watch: none named, the newest one running; else an experiment (its newest
+    # session), experiment/session, or a folder.
+    if not text:
+        running = running_sessions(sessions)
+        if not running:
+            msg = "no session is running; `task bench:ui` browses the finished ones"
+            raise SystemExit(msg)
+        return running[0]
+
+    for folder in (Path(text), sessions / text):
+        if (folder / "session.json").exists():
+            return folder
+    started = sorted((sessions / text).glob("*/session.json"), key=lambda path: path.parent.name)
+    if started:
+        return started[-1].parent
+
+    msg = f"no session {text!r} in {sessions}"
+    raise SystemExit(msg)
+
+
+def run_experiment(
+    experiment: Experiment,
+    rounds: int | None = None,
+    *,
+    dry_run: bool = False,
+    directory: Path | None = None,
+    echo: bool = True,
+) -> Path | None:
+    # directory: where the session goes, when the live view picked it to watch; else a new one.
+    # echo: print to the terminal as well as run.log; off when the live view shows run.log.
     rng = random.Random()  # noqa: S311 -- an order, not a secret
     schedule = plan(experiment, rounds or experiment.rounds, rng)
     if dry_run:
         describe(experiment, schedule)
         return None
 
-    directory = SESSIONS_DIR / experiment.name / datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    directory.mkdir(parents=True)
+    directory = directory or session_directory(experiment)
+    directory.mkdir(parents=True, exist_ok=True)
 
-    with logged_to(directory / "run.log"), kept_awake():
+    with logged_to(directory / "run.log", echo=echo), kept_awake():
         describe(experiment, schedule)
         session = Session(experiment, directory, schedule)
         session.save()
         try:
             # Everything that could stop the night, done before the first round.
+            session.events.emit(Event("step", text="checking Docker"))
             ensure_docker()
             for arm in experiment.arms:
                 if arm.database.image_ref:
+                    session.events.emit(Event("step", text=f"getting {arm.name}'s image ({arm.database.image_ref})"))
                     image = resolve_govec_image(arm.database.image_ref)
                     log(f"{arm.name} runs {image.image}")
             log("building the workload")
+            session.events.emit(Event("step", text="building the workload"))
             dataset_name, workload = build_workload(DATASETS[experiment.dataset], experiment.size)
 
             run_rounds(session, schedule, workload, dataset_name)
@@ -508,7 +589,8 @@ def run_experiment(experiment: Experiment, rounds: int | None = None, *, dry_run
             session.finish("interrupted")
             log(f"interrupted; what ran is in {directory}")
             raise SystemExit(130) from None
-        except BaseException:
+        except BaseException as exc:
+            session.warn(f"stopped: {type(exc).__name__}: {exc}")
             session.finish("failed")
             raise
 
@@ -522,3 +604,11 @@ def add_run_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("experiment", help="an experiment file, or the name of one in experiments/")
     parser.add_argument("--rounds", type=int, help="run this many rounds instead of the file's")
     parser.add_argument("--dry-run", action="store_true", help="show the plan and what each arm runs; run nothing")
+    parser.add_argument(
+        "--plain",
+        action="store_true",
+        help="print to the terminal instead of opening the live view (always, without one)",
+    )
+    parser.add_argument("--baseline", help="for the live view: a session, or 'published', to show each metric against")
+    # Where the session goes: set by the live view, which starts the run and watches this folder.
+    parser.add_argument("--into", type=Path, help=argparse.SUPPRESS)

@@ -5,17 +5,29 @@ import [PATH ...]   index results files (default: results/, the published ones i
 runs                list indexed runs, newest first, with what each database ran as
 run EXPERIMENT      run an experiment's rounds (benchmarks/experiment.py); --dry-run shows the plan
 compare SESSION     what a session found, per metric: each arm's median and range, change, verdict
+ui                  watch the session running (tui/live.py), or browse sessions when none is (tui/browse.py)
+
+`run` opens the live view when the terminal can show one; --plain prints instead.
 """
 
 import argparse
 import json
 import sqlite3
+import sys
 from collections.abc import Sequence
 from contextlib import closing
 from pathlib import Path
 
-from govec_bench.benchmarks.experiment import add_run_arguments, find_experiment, load_experiment, run_experiment
-from govec_bench.compare import PUBLISHED, compare
+from govec_bench.benchmarks.experiment import (
+    add_run_arguments,
+    find_experiment,
+    find_session_folder,
+    load_experiment,
+    run_experiment,
+    running_sessions,
+    session_directory,
+)
+from govec_bench.compare import PUBLISHED, SessionKey, compare, resolve_session
 from govec_bench.results import RESULTS_DB, RESULTS_DIR
 from govec_bench.store import connect, import_paths
 
@@ -64,8 +76,34 @@ def _runs(args: argparse.Namespace) -> None:
 
 
 def _run(args: argparse.Namespace) -> None:
-    experiment = load_experiment(find_experiment(args.experiment))
-    run_experiment(experiment, args.rounds, dry_run=args.dry_run)
+    path = find_experiment(args.experiment)
+    experiment = load_experiment(path)
+    if args.plain or args.dry_run or not sys.stdout.isatty():
+        # --into: the live view started this run and shows its run.log, so nothing to echo.
+        run_experiment(experiment, args.rounds, dry_run=args.dry_run, directory=args.into, echo=args.into is None)
+        return
+
+    from govec_bench.tui.app import BenchApp, start_runner  # noqa: PLC0415 -- Textual only when a view opens
+
+    directory = session_directory(experiment)
+    process = start_runner(path, directory, args.rounds)
+    with closing(connect(args.db)) as db:
+        BenchApp(db, live=directory, baseline=args.baseline, process=process).run()
+
+
+def _ui(args: argparse.Namespace) -> None:
+    from govec_bench.tui.app import BenchApp  # noqa: PLC0415 -- Textual only when a view opens
+
+    if args.live is not None:
+        live: Path | None = find_session_folder(args.live)
+    elif args.session is None:
+        live = next(iter(running_sessions()), None)
+    else:
+        live = None
+
+    with closing(connect(args.db)) as db:
+        session: SessionKey | None = resolve_session(db, args.session) if args.session and live is None else None
+        BenchApp(db, live=live, session=session, baseline=args.baseline).run()
 
 
 def _compare(args: argparse.Namespace) -> None:
@@ -113,6 +151,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     comparing.add_argument("--all", action="store_true", help="every metric stored, not only the headline ones")
     comparing.set_defaults(handler=_compare)
+
+    browsing = commands.add_parser("ui", help="browse sessions, or watch one running")
+    browsing.add_argument("session", nargs="?", help="the session to open (default: the newest)")
+    browsing.add_argument(
+        "--live",
+        nargs="?",
+        const="",
+        metavar="SESSION",
+        help="watch a session: the newest running (the default when one is), or an experiment, experiment/session or folder",
+    )
+    browsing.add_argument("--baseline", help=f"compare against this session, or {PUBLISHED!r}")
+    browsing.set_defaults(handler=_ui)
 
     return parser
 

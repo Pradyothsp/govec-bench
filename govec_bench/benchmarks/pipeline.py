@@ -19,7 +19,7 @@ import time
 import traceback
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
-from typing import NamedTuple
+from typing import Literal, NamedTuple
 
 from tqdm import tqdm
 
@@ -111,6 +111,14 @@ class Run:
             raise RuntimeError(msg)
 
         return self.adapter
+
+
+# Told each stage and step as it starts, besides the printed line: bench run's live view uses it.
+Progress = Callable[[Literal["stage", "step"], str], None]
+
+
+def _no_progress(_kind: Literal["stage", "step"], _label: str) -> None:
+    pass
 
 
 class Step(NamedTuple):
@@ -321,15 +329,17 @@ PIPELINE: list[Stage] = [
 ]
 
 
-def run_pipeline(run: Run, pipeline: Sequence[Stage]) -> None:
+def run_pipeline(run: Run, pipeline: Sequence[Stage], progress: Progress = _no_progress) -> None:
     for stage in pipeline:
         print(f"  [{stage.label}]")
+        progress("stage", stage.label)
         with running_alone(run.database, dimensions=run.workload.dimensions) as adapter:
             run.adapter = adapter
             run.container = container_of(run.database.service)
 
             for step in stage.steps:
                 print(f"    {step.label}...")
+                progress("step", step.label)
                 step.run(run)
 
         run.adapter = None
@@ -378,13 +388,15 @@ def build_workload(sizes: DatasetSizes, size: Size) -> tuple[str, Workload]:
     return dataset.name, workload
 
 
-def measure_database(database: Database, workload: Workload, run_position: int) -> dict[str, object]:
+def measure_database(
+    database: Database, workload: Workload, run_position: int, progress: Progress = _no_progress
+) -> dict[str, object]:
     # Every stage for one database. A failure partway is recorded with what came before it, so
     # one database failing doesn't discard the others' results.
     run = Run(database=database, workload=workload)
     error = None
     try:
-        run_pipeline(run, PIPELINE)
+        run_pipeline(run, PIPELINE, progress)
     except Exception as exc:  # noqa: BLE001 -- recorded in the results instead
         traceback.print_exc()
         error = f"{type(exc).__name__}: {exc}"
