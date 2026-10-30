@@ -12,7 +12,7 @@ from govec_bench.benchmarks.common import docker
 # the full descent curve out to t=300 (RSS is still descending even there, so
 # it was never a "settled" number either); this is a quick before/after
 # sanity check, not a re-run of that full characterization. The only
-# timing-independent figure is #14's pprof inuse_space (live heap).
+# timing-independent figure is a pprof inuse_space profile (the live heap).
 RAM_SAMPLE_DELAYS_S = (0, 60)
 
 
