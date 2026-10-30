@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass
 from tqdm import tqdm
 
 from govec_bench.adapters.base import VectorDBAdapter
-from govec_bench.benchmarks.common import parse_args, running_alone
+from govec_bench.benchmarks.common import parse_args, running_alone, setup_of
 from govec_bench.datasets.base import ArrayItems
 from govec_bench.results import LatencyStats, compute_latency_stats, write_results
 
@@ -72,7 +72,7 @@ def main() -> None:
     results: dict[str, object] = {}
     for name, database in args.databases.items():
         print(f"Measuring insert latency: {name}...")
-        with running_alone(name, database, dimensions=args.dataset.dimensions) as adapter:
+        with running_alone(database, dimensions=args.dataset.dimensions) as adapter:
             single_stats = measure_single_insert(adapter, dataset.base)
 
             adapter.reset()
@@ -83,7 +83,9 @@ def main() -> None:
             "batch": asdict(batch_stats),
         }
 
-    path = write_results(benchmark="insert_latency", dataset=dataset.name, results=results)
+    path = write_results(
+        benchmark="insert_latency", dataset=dataset.name, results=results, setup=setup_of(args.databases)
+    )
     print(f"Wrote {path}")
 
 

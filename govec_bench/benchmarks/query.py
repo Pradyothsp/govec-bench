@@ -2,7 +2,7 @@ import time
 from dataclasses import asdict
 
 from govec_bench.adapters.base import VectorDBAdapter
-from govec_bench.benchmarks.common import load_dataset, parse_args, running_alone
+from govec_bench.benchmarks.common import load_dataset, parse_args, running_alone, setup_of
 from govec_bench.results import LatencyStats, compute_latency_stats, write_results
 from govec_bench.types import Vector
 
@@ -26,12 +26,14 @@ def main() -> None:
     results: dict[str, object] = {}
     for name, database in args.databases.items():
         print(f"Measuring query latency: {name}...")
-        with running_alone(name, database, dimensions=args.dataset.dimensions) as adapter:
+        with running_alone(database, dimensions=args.dataset.dimensions) as adapter:
             load_dataset(adapter, dataset.base)
 
             results[name] = {f"k_{k}": asdict(measure_query_latency(adapter, dataset.queries, k)) for k in K_VALUES}
 
-    path = write_results(benchmark="query_latency", dataset=dataset.name, results=results)
+    path = write_results(
+        benchmark="query_latency", dataset=dataset.name, results=results, setup=setup_of(args.databases)
+    )
     print(f"Wrote {path}")
 
 

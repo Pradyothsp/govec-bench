@@ -17,28 +17,23 @@ Qdrant's doesn't.
 GoVec is also swept once at ef_construction=200, its default up to 0.2.0, as its own line.
 """
 
-import json
-import tempfile
 import time
 import traceback
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import asdict, dataclass
-from pathlib import Path
 from typing import NamedTuple
 
 from govec_bench.adapters.base import VectorDBAdapter
 from govec_bench.adapters.chroma_adapter import ChromaAdapter
 from govec_bench.adapters.qdrant_adapter import QdrantAdapter
-from govec_bench.adapters.registry import Database
+from govec_bench.adapters.registry import DATABASES, Database
 from govec_bench.benchmarks.common import (
     BenchArgs,
     build_parser,
-    container_of,
-    docker,
     load_dataset,
-    render_override,
     running_alone,
+    setup_of,
     to_bench_args,
 )
 from govec_bench.datasets.base import ArrayItems
@@ -110,7 +105,7 @@ class SweepFailure:
 type SearchEfSetter = Callable[[VectorDBAdapter, int], None]
 
 # Starts a database ready to load at (search ef, ef_construction, dataset dimensions).
-type FreshAt = Callable[[str, Database, int, int, int], AbstractContextManager[VectorDBAdapter]]
+type FreshAt = Callable[[Database, int, int, int], AbstractContextManager[VectorDBAdapter]]
 
 
 def _positive_int(value: str) -> int:
@@ -141,6 +136,10 @@ def parse_sweep_args(argv: Sequence[str] | None = None) -> SweepArgs:
     if args.db is None:
         args.db = list(DEFAULT_SERVICES)
 
+    unsweepable = sorted(name for name in args.db if not has_search_ef(DATABASES[name]))
+    if unsweepable:
+        parser.error(f"{', '.join(unsweepable)} has no search ef to sweep")
+
     return SweepArgs(
         bench=to_bench_args(args),
         ef_values=tuple(sorted(set(args.ef or EF_VALUES))),
@@ -156,36 +155,19 @@ def _set_qdrant_ef(adapter: VectorDBAdapter, ef: int) -> None:
     adapter.set_search_ef(ef)
 
 
-def _check_container_env(service: str, expected: dict[str, str]) -> None:
-    # Proof the override reached the container: a typo in a service name would otherwise start it
-    # on its config file's ef, and every point would measure the same search.
-    env = json.loads(docker("inspect", "--format", "{{json .Config.Env}}", container_of(service)).stdout)
-    missing = [f"{key}={value}" for key, value in expected.items() if f"{key}={value}" not in env]
-    if missing:
-        msg = f"{service} started without {missing}"
-        raise RuntimeError(msg)
-
-
 @contextmanager
-def _govec_at(
-    service: str, database: Database, ef: int, ef_construction: int, dimensions: int
-) -> Iterator[VectorDBAdapter]:
+def _govec_at(database: Database, ef: int, ef_construction: int, dimensions: int) -> Iterator[VectorDBAdapter]:
+    # running_alone() checks the settings reached the container: a typo would otherwise start it
+    # on its config file's ef, and every point would measure the same search.
     environment = govec_env(ef_search=ef, ef_construction=ef_construction)
 
-    with tempfile.TemporaryDirectory() as tmp:
-        override = Path(tmp) / "ef-sweep.override.yml"
-        override.write_text(render_override(service, environment))
-
-        with running_alone(service, database, overrides=(override,), dimensions=dimensions) as adapter:
-            _check_container_env(service, environment)
-            yield adapter
+    with running_alone(database, env=environment, dimensions=dimensions) as adapter:
+        yield adapter
 
 
 @contextmanager
-def _chroma_at(
-    service: str, database: Database, ef: int, ef_construction: int, dimensions: int
-) -> Iterator[VectorDBAdapter]:
-    with running_alone(service, database, dimensions=dimensions) as adapter:
+def _chroma_at(database: Database, ef: int, ef_construction: int, dimensions: int) -> Iterator[VectorDBAdapter]:
+    with running_alone(database, dimensions=dimensions) as adapter:
         if not isinstance(adapter, ChromaAdapter):
             msg = f"expected a ChromaAdapter, got {type(adapter).__name__}"
             raise TypeError(msg)
@@ -201,18 +183,21 @@ def _chroma_at(
         yield adapter
 
 
-# Databases whose search ef changes on a loaded graph, and how.
+# Engines whose search ef changes on a loaded graph, and how.
 IN_PLACE: dict[str, SearchEfSetter] = {
     "qdrant": _set_qdrant_ef,
 }
 
-# Databases swept with a fresh container and load per ef, and how each starts.
+# Engines swept with a fresh container and load per ef, and how each starts.
 REBUILD_PER_EF: dict[str, FreshAt] = {
     "govec": _govec_at,
-    "govec-scalar": _govec_at,
-    "govec-mmap": _govec_at,
     "chroma": _chroma_at,
 }
+
+
+def has_search_ef(database: Database) -> bool:
+    # An exact linear scan reads every vector whatever ef says: nothing to sweep.
+    return database.env.get("GOVEC_INDEX_TYPE") != "brute"
 
 
 def plan_series(services: Sequence[str]) -> list[SeriesPlan]:
@@ -272,10 +257,10 @@ def _load_checked(adapter: VectorDBAdapter, base: ArrayItems) -> None:
 
 
 def sweep_in_place(
-    service: str, database: Database, workload: Workload, sweep: SweepArgs, set_ef: SearchEfSetter
+    database: Database, workload: Workload, sweep: SweepArgs, set_ef: SearchEfSetter
 ) -> list[SweepPoint]:
     points = []
-    with running_alone(service, database, dimensions=sweep.bench.dataset.dimensions) as adapter:
+    with running_alone(database, dimensions=sweep.bench.dataset.dimensions) as adapter:
         _load_checked(adapter, workload.base)
 
         for ef in sweep.ef_values:
@@ -292,7 +277,7 @@ def sweep_by_rebuild(
     points = []
     for ef in sweep.ef_values:
         print(f"  ef={ef} (fresh container)")
-        with fresh_at(plan.service, database, ef, plan.ef_construction, sweep.bench.dataset.dimensions) as adapter:
+        with fresh_at(database, ef, plan.ef_construction, sweep.bench.dataset.dimensions) as adapter:
             _load_checked(adapter, workload.base)
 
             points.extend(measure_ef(adapter, workload, ef, sweep.k_values))
@@ -301,12 +286,12 @@ def sweep_by_rebuild(
 
 
 def run_series(plan: SeriesPlan, database: Database, workload: Workload, sweep: SweepArgs) -> SweepSeries:
-    if plan.service in IN_PLACE:
-        points = sweep_in_place(plan.service, database, workload, sweep, IN_PLACE[plan.service])
+    if database.service in IN_PLACE:
+        points = sweep_in_place(database, workload, sweep, IN_PLACE[database.service])
         return SweepSeries(plan.service, plan.ef_construction, "loaded graph, ef changed in place", points)
 
-    if plan.service in REBUILD_PER_EF:
-        fresh_at = REBUILD_PER_EF[plan.service]
+    if database.service in REBUILD_PER_EF:
+        fresh_at = REBUILD_PER_EF[database.service]
         points = sweep_by_rebuild(plan, database, workload, sweep, fresh_at)
         return SweepSeries(plan.service, plan.ef_construction, "fresh container and load per ef", points)
 
@@ -352,6 +337,7 @@ def main() -> None:
         benchmark="ef_sweep",
         dataset=dataset.name,
         results={label: asdict(series) for label, series in results.items()},
+        setup=setup_of(sweep.bench.databases),
     )
     print(format_table(results))
     print(f"Wrote {path}")

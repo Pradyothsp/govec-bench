@@ -1,10 +1,8 @@
-import json
 from dataclasses import asdict
 
 import pytest
 
 from govec_bench.adapters.registry import DATABASES
-from govec_bench.benchmarks.common import render_override
 from govec_bench.benchmarks.ef_sweep import (
     DEFAULT_SERVICES,
     EF_CONSTRUCTION,
@@ -18,7 +16,7 @@ from govec_bench.benchmarks.ef_sweep import (
     SweepPoint,
     SweepSeries,
     format_table,
-    govec_env,
+    has_search_ef,
     parse_sweep_args,
     plan_series,
 )
@@ -78,15 +76,30 @@ def test_parse_sweep_args__ef_zero__exits_with_usage_error() -> None:
     assert exc_info.value.code == 2
 
 
-def test_sweep__every_registered_database__has_a_way_to_set_ef() -> None:
+def test_sweep__every_registered_database__has_a_way_to_set_ef_or_has_none() -> None:
     # Arrange
-    swept = set(IN_PLACE) | set(REBUILD_PER_EF)
+    swept_engines = set(IN_PLACE) | set(REBUILD_PER_EF)
 
     # Act
-    missing = set(DATABASES) - swept
+    missing = {
+        name
+        for name, database in DATABASES.items()
+        if has_search_ef(database) and database.service not in swept_engines
+    }
 
     # Assert
     assert missing == set()
+
+
+def test_has_search_ef__brute_force_database__has_none() -> None:
+    # Arrange
+    brute = DATABASES["govec-brute"]
+
+    # Act
+    sweepable = has_search_ef(brute)
+
+    # Assert
+    assert not sweepable
 
 
 def test_plan_series__govec__adds_a_line_at_its_default_ef_construction() -> None:
@@ -102,23 +115,6 @@ def test_plan_series__govec__adds_a_line_at_its_default_ef_construction() -> Non
         SeriesPlan(label="govec@efc200", service="govec", ef_construction=GOVEC_DEFAULT_EF_CONSTRUCTION),
         SeriesPlan(label="qdrant", service="qdrant", ef_construction=EF_CONSTRUCTION),
     ]
-
-
-def test_render_override__govec_env__sets_environment_on_that_service_only() -> None:
-    # Arrange
-    environment = govec_env(ef_search=400, ef_construction=100)
-
-    # Act
-    override = json.loads(render_override("govec-scalar", environment))
-
-    # Assert
-    assert override == {
-        "services": {
-            "govec-scalar": {
-                "environment": {"GOVEC_HNSW_EF_SEARCH": "400", "GOVEC_HNSW_EF_CONSTRUCTION": "100"},
-            },
-        },
-    }
 
 
 def test_sweep_series__asdict__nests_recall_and_latency_per_point() -> None:
@@ -166,3 +162,15 @@ def test_format_table__failed_series__reported_alongside_measured_ones() -> None
     assert len(lines) == 3
     assert lines[1].split()[:4] == ["qdrant", "50", "10", "0.9500"]
     assert lines[2] == f"{'chroma':<16} FAILED: RuntimeError: boom"
+
+
+def test_parse_sweep_args__brute_force_named__exits_with_usage_error() -> None:
+    # Arrange
+    argv = ["--db", "govec", "--db", "govec-brute"]
+
+    # Act
+    with pytest.raises(SystemExit) as exc_info:
+        parse_sweep_args(argv)
+
+    # Assert
+    assert exc_info.value.code == 2

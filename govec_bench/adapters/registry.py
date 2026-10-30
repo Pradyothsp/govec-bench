@@ -1,53 +1,109 @@
 from collections.abc import Callable, Iterable
 from functools import partial
+from pathlib import Path
 from typing import NamedTuple
+
+import yaml
 
 from govec_bench.adapters.base import VectorDBAdapter
 from govec_bench.adapters.chroma_adapter import ChromaAdapter
 from govec_bench.adapters.govec_adapter import GovecAdapter
 from govec_bench.adapters.qdrant_adapter import QdrantAdapter
 
+DATABASES_FILE = Path(__file__).resolve().parents[2] / "databases.yaml"
 
-class Database(NamedTuple):
+
+class Engine(NamedTuple):
     # A constructor, not an adapter: constructing one connects (Chroma's does), so it can only
-    # be built once that database's container is running.
+    # be built once the container is running.
     build_adapter: Callable[[], VectorDBAdapter]
     disk_paths: tuple[str, ...]  # what the memory benchmark measures inside the container
-    # Must be told the vector width at startup (GoVec's mmap store sizes its slots from it), so
-    # running_alone() passes it as GOVEC_DIMENSIONS. Everything else learns it from the first insert.
-    needs_dimensions: bool = False
-    # Runs only when named with --db: a variant for a specific comparison, not the standard suite.
-    opt_in: bool = False
     # A second client to the same container over another transport, for comparing query latency
-    # on the same index. None for databases the bench drives one way only.
+    # on the same index. None for engines the bench drives one way only.
     build_grpc_adapter: Callable[[], VectorDBAdapter] | None = None
 
 
-GOVEC_DISK_PATHS = ("/data/govec_data.bin", "/data/govec.wal")
-
-# Keyed by docker-compose.yml service name, which is also the name results are written under.
-# The one list of databases: every benchmark runs these, except opt-in ones, unless --db narrows it.
-DATABASES: dict[str, Database] = {
-    "govec": Database(
-        GovecAdapter, GOVEC_DISK_PATHS, build_grpc_adapter=partial(GovecAdapter, port=9698, protocol="grpc")
+# One per docker-compose.yml service. A path that doesn't exist measures 0 (GoVec's mmap
+# directory, unless mmap is on), so one list serves every setup of an engine.
+ENGINES: dict[str, Engine] = {
+    "govec": Engine(
+        GovecAdapter,
+        ("/data/govec_data.bin", "/data/govec.wal", "/data/govec_mmap"),
+        partial(GovecAdapter, port=9698, protocol="grpc"),
     ),
-    # GoVec again with int8 scalar quantization (govec-config-scalar.yaml), to measure what
-    # quantization costs and saves against float32.
-    "govec-scalar": Database(partial(GovecAdapter, port=9699), GOVEC_DISK_PATHS),
-    # GoVec again with vectors in memory-mapped files (govec-config-mmap.yaml), to measure what
-    # moving them out of the Go heap costs and saves.
-    # It also answers over gRPC: Qdrant keeps dense vectors memory-mapped by default (v1.19's
-    # "cached" tier), so this, over gRPC, is GoVec's like-for-like comparison with stock Qdrant.
-    "govec-mmap": Database(
-        partial(GovecAdapter, port=9700),
-        (*GOVEC_DISK_PATHS, "/data/govec_mmap"),
-        needs_dimensions=True,
-        opt_in=True,
-        build_grpc_adapter=partial(GovecAdapter, port=9702, protocol="grpc"),
-    ),
-    "chroma": Database(ChromaAdapter, ("/data",)),
-    "qdrant": Database(QdrantAdapter, ("/qdrant/storage",), build_grpc_adapter=partial(QdrantAdapter, grpc=True)),
+    "chroma": Engine(ChromaAdapter, ("/data",)),
+    "qdrant": Engine(QdrantAdapter, ("/qdrant/storage",), partial(QdrantAdapter, grpc=True)),
 }
+
+
+class Database(NamedTuple):
+    name: str  # what results are written under
+    service: str  # the docker-compose.yml service it runs as: its engine
+    build_adapter: Callable[[], VectorDBAdapter]
+    disk_paths: tuple[str, ...]
+    env: dict[str, str]  # settings changed from the engine's config, applied at start
+    # Must be told the vector width at startup (GoVec's mmap store sizes its slots from it), so
+    # running_alone() passes it as GOVEC_DIMENSIONS. Everything else learns it from the first insert.
+    needs_dimensions: bool = False
+    # Runs only when named with --db: a setup for a specific comparison, not the standard suite.
+    opt_in: bool = False
+    build_grpc_adapter: Callable[[], VectorDBAdapter] | None = None
+    # What to run instead of the image docker-compose.yml pins: an image, or a git ref of the
+    # GoVec repo to build (see benchmarks/images.py). None runs the pin.
+    image_ref: str | None = None
+
+
+_DATABASE_KEYS = {"engine", "env", "opt_in", "needs_dimensions"}
+
+
+def _env_value(value: object) -> str:
+    # YAML reads true, yes and on as booleans and 16 as a number; environment variables are
+    # strings, and Go parses "true".
+    if isinstance(value, bool):
+        return "true" if value else "false"
+
+    return str(value)
+
+
+def parse_databases(text: str) -> dict[str, Database]:
+    entries = yaml.safe_load(text) or {}
+    if not isinstance(entries, dict):
+        msg = f"expected databases by name, got a {type(entries).__name__}"
+        raise TypeError(msg)
+
+    databases: dict[str, Database] = {}
+    for name, entry in entries.items():
+        if not isinstance(entry, dict):
+            msg = f"{name}: expected its settings (engine: ...), got {entry!r}"
+            raise TypeError(msg)
+
+        unknown = set(entry) - _DATABASE_KEYS
+        if unknown:
+            msg = f"{name}: unknown keys {sorted(unknown)}; expected some of {sorted(_DATABASE_KEYS)}"
+            raise ValueError(msg)
+
+        engine_name = entry.get("engine")
+        if engine_name not in ENGINES:
+            msg = f"{name}: engine {engine_name!r} is not one of {sorted(ENGINES)}"
+            raise ValueError(msg)
+
+        engine = ENGINES[engine_name]
+        databases[name] = Database(
+            name=name,
+            service=engine_name,
+            build_adapter=engine.build_adapter,
+            disk_paths=engine.disk_paths,
+            env={key: _env_value(value) for key, value in entry.get("env", {}).items()},
+            needs_dimensions=entry.get("needs_dimensions", False),
+            opt_in=entry.get("opt_in", False),
+            build_grpc_adapter=engine.build_grpc_adapter,
+        )
+
+    return databases
+
+
+# The one list of databases: every benchmark runs these, except opt-in ones, unless --db narrows it.
+DATABASES: dict[str, Database] = parse_databases(DATABASES_FILE.read_text())
 
 
 def select_databases(names: Iterable[str] | None = None) -> dict[str, Database]:
@@ -55,5 +111,5 @@ def select_databases(names: Iterable[str] | None = None) -> dict[str, Database]:
         return {name: database for name, database in DATABASES.items() if not database.opt_in}
 
     selected = set(names)
-    # Registry order, whatever order the names came in, so results files always list databases alike.
+    # File order, whatever order the names came in, so results files always list databases alike.
     return {name: database for name, database in DATABASES.items() if name in selected}

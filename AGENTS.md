@@ -27,7 +27,8 @@ several "GoVec wins" here have turned out to be measurement errors.
 | `task bench:insert` (`query`, `recall`, `memory`, `coldstart`) | Run one benchmark; `-- --db govec --db qdrant` runs only those databases |
 | `task bench:pipeline` | Every benchmark from one load per database: batch insert, disk and RAM, recall and query latency (GoVec and Qdrant also over gRPC, same index; Chroma has no gRPC client), restarts with data and empty, single inserts on 10k. `SIZE=large` for 100k |
 | `task bench:sweep` | Recall@k against query latency per search ef (`-- --ef 50 --ef 100 --k 10` to narrow); GoVec, Chroma and Qdrant unless `--db` says otherwise (`--db govec-scalar` adds int8); not part of `bench:all` |
-| `COMPOSE_FILE=docker-compose.yml:compose.govec-efc200.yaml task bench:insert -- --db govec` | Any benchmark with GoVec built at `ef_construction=200` (its default up to 0.2.0) instead of 100 |
+| `task bench:insert -- --db govec --set hnsw_ef_construction=200` | Any benchmark with a GoVec setting changed for one run: a key of `govec-config.yaml` as its `GOVEC_` variable without the prefix; repeat `--set` for several. Here `ef_construction=200`, GoVec's default up to 0.2.0 |
+| `task bench:pipeline -- --db govec-mmap --govec HEAD` | Run GoVec from a commit of the GoVec repo (`../govec`, or `GOVEC_REPO`) instead of the pin: built once from a clean copy, tagged `govec-bench/govec:<commit>`. Any image works too (`--govec govec:local`, `--govec ghcr.io/pradyothsp/govec:0.2.1`). For development comparisons; published numbers use the pin |
 | `task test` | Unit tests |
 | `task fmt` / `task fmt:check` | Format and autofix / ruff + ty + format check |
 | `task docker:clean` | Remove this project's containers, images and volumes |
@@ -41,11 +42,14 @@ govec_bench/
     govec_adapter.py   via the govec SDK from PyPI, REST transport (gRPC for the pipeline's gRPC step)
     chroma_adapter.py  via chromadb's HTTP client, cosine space
     qdrant_adapter.py  via qdrant-client, cosine distance, keep-alive forced on (gRPC for the pipeline's gRPC step)
-    registry.py        DATABASES: the one list of databases, by compose service: adapter, disk paths,
-                       whether it needs the dimension at startup, whether it's opt-in (govec-mmap)
-  benchmarks/          one script per benchmark; common.py has arguments, dataset loading, docker helpers
+    registry.py        ENGINES: one per compose service (adapter, disk paths, gRPC client); DATABASES,
+                       read from databases.yaml: each database's engine and settings, whether it needs
+                       the dimension at startup, whether it's opt-in (govec-mmap, govec-brute)
+  benchmarks/          one script per benchmark; common.py has arguments (--db, --govec, --set), dataset
+                       loading, docker helpers and running_alone(), which runs one database's container
+                       at a time with its settings and image layered on, and checks they reached it
                        pipeline.py runs them all from one load: PIPELINE is a list of stages of steps
-                       and running_alone(), which runs one database's container at a time
+                       images.py turns --govec into an image, building a GoVec commit when given one
   datasets/
     base.py            VectorDataset; ArrayItems keeps vectors in one array, builds items on read
     sift.py            fvecs/ivecs readers; SIFT10K and SIFT100K (128-dim image descriptors)
@@ -53,16 +57,20 @@ govec_bench/
     registry.py        --dataset name -> (10k loader, 100k loader, dimensions); Size and load_sized()
     groundtruth.py     exact cosine neighbours by brute force: the recall answer key
   results.py           latency/recall statistics and the JSON results writer
-docker-compose.yml     the databases, pinned images, 2 CPU / 2 GB each
-govec-config*.yaml     GoVec's config for the float32 and int8 services
+docker-compose.yml     one service per engine, pinned images, 2 CPU / 2 GB each
+databases.yaml         every database by name: its engine and the settings it changes (GOVEC_ variables)
+govec-config.yaml      GoVec's config; each GoVec database changes it through environment variables
 ```
 
 ## Rules for a fair comparison
 
-- **Pinned, published images only.** `docker-compose.yml` pins every database to a released
-  image (Chroma by digest, since it publishes no tag for 1.4.4). Never benchmark a local build
-  or `:latest`: results must be reproducible by anyone, and comparable between runs. Bump a pin
-  deliberately and re-run everything.
+- **Pinned, published images for published numbers.** `docker-compose.yml` pins every database
+  to a released image (Chroma by digest, since it publishes no tag for 1.4.4). Published results
+  must be reproducible by anyone, and comparable between runs: never publish a local build or
+  `:latest`. Bump a pin deliberately and re-run everything. `--govec` runs another GoVec image or
+  a build of a commit, for development comparisons (before and after a change); every results
+  file records each database's image, image ID, GoVec commit and settings under `setup`, so such a
+  result can't pass for the pin.
 - **Identical resource caps.** Every service gets 2 CPUs and 2 GB.
 - **One database at a time.** Every benchmark starts only the container it measures, on fresh
   volumes, and removes it afterwards (`running_alone()`). Idle neighbours still compact,
@@ -77,11 +85,18 @@ govec-config*.yaml     GoVec's config for the float32 and int8 services
 
 ## Adding a database
 
+**Another setup of an engine** (GoVec with a setting changed): an entry in `databases.yaml`, with
+the settings as environment variables. Nothing else: it runs as the engine's service, and
+`running_alone()` checks the settings reached the container. For one run only, use `--set`.
+
+**A new engine:**
+
 1. An adapter in `adapters/`, implementing `VectorDBAdapter`.
 2. A service in `docker-compose.yml`: pinned image, the same caps, a health check if possible.
-3. An entry in `adapters/registry.py` (`DATABASES`), keyed by that service's name: its adapter
-   and the data paths the memory benchmark measures. Every benchmark picks it up from there.
-4. Run the full suite, and check its numbers are plausible before trusting them.
+3. An entry in `ENGINES` in `adapters/registry.py`, keyed by that service's name: its adapter and
+   the data paths the memory benchmark measures.
+4. An entry in `databases.yaml` naming the engine. Every benchmark picks it up from there.
+5. Run the full suite, and check its numbers are plausible before trusting them.
 
 ## Measurement traps (found the hard way)
 
@@ -114,7 +129,7 @@ govec-config*.yaml     GoVec's config for the float32 and int8 services
 - **A GoVec snapshot overrides the configured `ef_search` (up to 0.2.0; fixed after).** The snapshot stores the graph's
   ef_search and loading it overwrites `GOVEC_HNSW_EF_SEARCH`/`hnsw_ef_search`, so restarting a
   loaded container with a new ef searches with the old one. `ef_sweep.py` starts a fresh
-  container per ef instead, and checks the env reached it.
+  container per ef instead (`running_alone()` checks the env reached it).
 - **Chroma ignores a changed `ef_search` on an existing collection.** On 1.4.4,
   `collection.modify(configuration={"hnsw": {"ef_search": …}})` succeeds and the server reports
   the new value, but queries keep the ef the collection was created with. Set it at creation

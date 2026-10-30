@@ -1,5 +1,10 @@
 # Every database runs a pinned, published image, so anyone re-running this compares exactly the
 # versions behind the published numbers. Bump a pin deliberately, and re-run everything after.
+#
+# One service per engine. Every GoVec setup in databases.yaml runs as the govec service, with its
+# settings as environment variables layered on at start; only one database runs at a time, so they
+# share its ports. `--govec <ref>` runs another GoVec image or a build of a GoVec commit instead
+# of the pin, for development comparisons: published numbers come from the pin.
 services:
   govec:
     image: ghcr.io/pradyothsp/govec:0.2.1
@@ -14,43 +19,6 @@ services:
     #   - GOMEMLIMIT=250MiB
     volumes:
       - ./govec-config.yaml:/app/config.yaml:ro
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:9697/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    deploy:
-      resources:
-        limits:
-          cpus: "2"
-          memory: 2G
-
-  govec-scalar:
-    image: ghcr.io/pradyothsp/govec:0.2.1
-    container_name: govec-bench-govec-scalar
-    ports:
-      - "9699:9697"
-    volumes:
-      - ./govec-config-scalar.yaml:/app/config.yaml:ro
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:9697/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    deploy:
-      resources:
-        limits:
-          cpus: "2"
-          memory: 2G
-
-  govec-mmap:
-    image: ghcr.io/pradyothsp/govec:0.2.1
-    container_name: govec-bench-govec-mmap
-    ports:
-      - "9700:9697"
-      - "9702:9698" # gRPC, for the pipeline's REST-vs-gRPC query latency step
-    volumes:
-      - ./govec-config-mmap.yaml:/app/config.yaml:ro
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:9697/health"]
       interval: 5s

@@ -1,0 +1,46 @@
+# The databases every benchmark can run, by name; results are written under these names.
+#
+# A database is an engine (a service in docker-compose.yml) plus the settings it changes from that
+# engine's config, as environment variables. GoVec reads GOVEC_ plus any key of govec-config.yaml
+# (GOVEC_ENABLE_MMAP, GOVEC_QUANTIZATION, GOVEC_HNSW_EF_CONSTRUCTION, ...) over the mounted file.
+# Only one database runs at a time, so all of an engine's databases share its ports and container.
+#
+#   engine            the docker-compose.yml service it runs as: govec, chroma or qdrant
+#   env               settings changed from the engine's config
+#   opt_in            runs only when named with --db: a setup for a specific comparison
+#   needs_dimensions  must be told the vector width at startup (GoVec's mmap store sizes its
+#                     slots from it); the harness passes the dataset's as GOVEC_DIMENSIONS
+#
+# Adding a GoVec setup is an entry here, nothing else.
+
+govec:
+  engine: govec
+
+# int8 scalar quantization, to measure what it costs and saves against float32.
+govec-scalar:
+  engine: govec
+  env:
+    GOVEC_QUANTIZATION: scalar
+
+# Vectors in memory-mapped files the OS pages, not the Go heap. Qdrant keeps its dense vectors
+# memory-mapped by default (v1.19's "cached" tier), so this is GoVec's like-for-like with it.
+govec-mmap:
+  engine: govec
+  env:
+    GOVEC_ENABLE_MMAP: true
+  opt_in: true
+  needs_dimensions: true
+
+# An exact linear scan instead of HNSW, to measure what the graph buys in query time and costs
+# in inserts and memory.
+govec-brute:
+  engine: govec
+  env:
+    GOVEC_INDEX_TYPE: brute
+  opt_in: true
+
+chroma:
+  engine: chroma
+
+qdrant:
+  engine: qdrant

@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.14"
 
 [[package]]
@@ -462,6 +462,7 @@ dependencies = [
     { name = "govec" },
     { name = "numpy" },
     { name = "pyarrow" },
+    { name = "pyyaml" },
     { name = "qdrant-client" },
     { name = "tqdm" },
 ]
@@ -482,6 +483,7 @@ requires-dist = [
     { name = "govec", specifier = ">=0.1.2" },
     { name = "numpy", specifier = ">=2.0" },
     { name = "pyarrow", specifier = ">=25.0.1" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "qdrant-client", specifier = ">=1.12.0" },
     { name = "tqdm", specifier = ">=4.70.0" },
 ]

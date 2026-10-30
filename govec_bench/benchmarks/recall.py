@@ -10,6 +10,7 @@ from govec_bench.benchmarks.common import (
     load_dataset,
     require_free_disk,
     running_alone,
+    setup_of,
     to_bench_args,
 )
 from govec_bench.datasets.base import ArrayItems
@@ -67,7 +68,7 @@ def main() -> None:
     results: dict[str, object] = {}
     for name, database in args.bench.databases.items():
         print(f"Measuring recall: {name}...")
-        with running_alone(name, database, dimensions=args.bench.dataset.dimensions) as adapter:
+        with running_alone(database, dimensions=args.bench.dataset.dimensions) as adapter:
             load_dataset(adapter, dataset.base)
 
             results[name] = {
@@ -75,7 +76,9 @@ def main() -> None:
                 for k in K_VALUES
             }
 
-    path = write_results(benchmark="recall", dataset=dataset.name, results=results)
+    path = write_results(
+        benchmark="recall", dataset=dataset.name, results=results, setup=setup_of(args.bench.databases)
+    )
     print(f"Wrote {path}")
 
 

@@ -193,10 +193,13 @@ task bench:sweep       # recall against latency across search ef
 DATASET=dbpedia SIZE=large task bench:pipeline   # everything at 100k text embeddings
 ```
 
-Each benchmark writes `results/<benchmark>_<timestamp>.json`, with one section per database.
+Each benchmark writes `results/<benchmark>_<timestamp>.json`, with one section per database and
+what each ran as (image, image ID, settings) under `setup`.
 Run single benchmarks with `task bench:insert`, `bench:query`, `bench:recall`, `bench:memory` or
 `bench:coldstart`.
-Add `-- --db govec --db chroma` to run only some databases.
+Add `-- --db govec --db chroma` to run only some databases. The databases are listed in
+`databases.yaml`: GoVec's variants (int8, memory-mapped, brute force) are entries there, each a
+few settings over `govec-config.yaml`. `--set KEY=VALUE` changes a GoVec setting for one run.
 
 ## Run-to-run variation
 

@@ -10,6 +10,7 @@ from govec_bench.benchmarks.common import (
     parse_args,
     require_free_disk,
     running_alone,
+    setup_of,
 )
 from govec_bench.results import write_results
 
@@ -211,8 +212,8 @@ def main() -> None:
         # running_alone() starts each database on empty volumes: Chroma's own reset() leaves
         # orphaned collection directories on disk (382MB of them once), so a reused volume would
         # make the disk numbers meaningless.
-        with running_alone(name, database, dimensions=args.dataset.dimensions) as adapter:
-            container = container_of(name)
+        with running_alone(database, dimensions=args.dataset.dimensions) as adapter:
+            container = container_of(database.service)
             baseline = measure_footprint(container, database.disk_paths)
 
             print(f"Loading {len(dataset.base)} vectors into {name}...")
@@ -228,7 +229,7 @@ def main() -> None:
 
         results[name] = memory_result_to_json(build_memory_result(baseline, disk_after, ram_series))
 
-    path = write_results(benchmark="memory", dataset=dataset.name, results=results)
+    path = write_results(benchmark="memory", dataset=dataset.name, results=results, setup=setup_of(args.databases))
     print(f"Wrote {path}")
 
 

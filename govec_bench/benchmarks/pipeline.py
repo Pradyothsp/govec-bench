@@ -36,6 +36,7 @@ from govec_bench.benchmarks.common import (
     container_of,
     require_free_disk,
     running_alone,
+    setup_of,
     to_bench_args,
 )
 from govec_bench.benchmarks.insert import BATCH_SIZE, InsertStats, measure_batch_insert, measure_single_insert
@@ -97,7 +98,6 @@ class Record:
 @dataclass(slots=True)
 class Run:
     # What steps share for one database. The runner sets adapter and container for each stage.
-    service: str
     database: Database
     workload: Workload
     record: Record = field(default_factory=Record)
@@ -277,10 +277,10 @@ def measure_loaded_cold_start(run: Run) -> None:
     probe = run.workload.queries[0]
     latencies_ms = []
     for _ in tqdm(range(RESTARTS), desc="restarts", leave=False):
-        compose("stop", run.service)
+        compose("stop", run.database.service)
 
         start = time.perf_counter()
-        compose("start", run.service)
+        compose("start", run.database.service)
         wait_until_answering(run.database.build_adapter, probe, LOADED_START_TIMEOUT_S)
         latencies_ms.append((time.perf_counter() - start) * 1000)
 
@@ -290,7 +290,7 @@ def measure_loaded_cold_start(run: Run) -> None:
 
 
 def measure_empty_cold_start(run: Run) -> None:
-    run.record.cold_start_empty = measure_cold_start(run.service, run.database.build_adapter)
+    run.record.cold_start_empty = measure_cold_start(run.database.service, run.database.build_adapter)
 
     show(f"until it answers: {latency_text(run.record.cold_start_empty)}")
 
@@ -324,9 +324,9 @@ PIPELINE: list[Stage] = [
 def run_pipeline(run: Run, pipeline: Sequence[Stage]) -> None:
     for stage in pipeline:
         print(f"  [{stage.label}]")
-        with running_alone(run.service, run.database, dimensions=run.workload.dimensions) as adapter:
+        with running_alone(run.database, dimensions=run.workload.dimensions) as adapter:
             run.adapter = adapter
-            run.container = container_of(run.service)
+            run.container = container_of(run.database.service)
 
             for step in stage.steps:
                 print(f"    {step.label}...")
@@ -384,7 +384,7 @@ def main() -> None:
     results: dict[str, object] = {}
     for position, name in enumerate(order):
         print(f"{name}:")
-        run = Run(service=name, database=databases[name], workload=workload)
+        run = Run(database=databases[name], workload=workload)
         error = None
         try:
             run_pipeline(run, PIPELINE)
@@ -396,7 +396,7 @@ def main() -> None:
 
     # Registry order in the file, whatever order they ran in, so every results file lists databases alike.
     results = {name: results[name] for name in databases}
-    path = write_results(benchmark="pipeline", dataset=dataset.name, results=results)
+    path = write_results(benchmark="pipeline", dataset=dataset.name, results=results, setup=setup_of(databases))
     print(f"Wrote {path}")
 
 

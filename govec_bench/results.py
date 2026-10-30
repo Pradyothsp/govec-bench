@@ -37,7 +37,10 @@ def compute_recall_stats(recalls: list[float]) -> RecallStats:
     )
 
 
-def write_results(benchmark: str, dataset: str, results: dict[str, object]) -> Path:
+def write_results(
+    benchmark: str, dataset: str, results: dict[str, object], setup: dict[str, object] | None = None
+) -> Path:
+    # setup: what each database ran as (image, GoVec commit, settings), from common.setup_of().
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now(UTC)
@@ -45,6 +48,7 @@ def write_results(benchmark: str, dataset: str, results: dict[str, object]) -> P
         "benchmark": benchmark,
         "timestamp": timestamp.isoformat(),
         "dataset": dataset,
+        "setup": setup or {},
         "results": results,
     }
 

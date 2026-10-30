@@ -5,7 +5,7 @@ from dataclasses import asdict
 from tqdm import tqdm
 
 from govec_bench.adapters.base import VectorDBAdapter
-from govec_bench.benchmarks.common import compose, parse_args, running_alone, wait_until_queryable
+from govec_bench.benchmarks.common import compose, parse_args, running_alone, setup_of, wait_until_queryable
 from govec_bench.results import LatencyStats, compute_latency_stats, write_results
 
 ITERATIONS = 5
@@ -34,10 +34,10 @@ def main() -> None:
     results: dict[str, object] = {}
     for name, database in args.databases.items():
         print(f"Measuring cold start: {name}...")
-        with running_alone(name, database, dimensions=args.dataset.dimensions):
-            results[name] = asdict(measure_cold_start(name, database.build_adapter))
+        with running_alone(database, dimensions=args.dataset.dimensions):
+            results[name] = asdict(measure_cold_start(database.service, database.build_adapter))
 
-    path = write_results(benchmark="cold_start", dataset="n/a", results=results)
+    path = write_results(benchmark="cold_start", dataset="n/a", results=results, setup=setup_of(args.databases))
     print(f"Wrote {path}")
 
 

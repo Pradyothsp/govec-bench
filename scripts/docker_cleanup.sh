@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Tears down this project's Docker footprint to reclaim disk space: stops and
 # removes the govec-bench containers, every image this compose file builds or
-# pulls (govec, govec-scalar, chromadb/chroma, qdrant/qdrant), and all of this
+# pulls (govec, chromadb/chroma, qdrant/qdrant), the GoVec images built from commits for
+# --govec (govec-bench/govec:<commit>), and all of this
 # project's volumes -- both the ones declared in docker-compose.yml
 # (chroma_data, qdrant_data) and any orphaned ones left over from a prior
 # crashed run, matched by Compose's project-label rather than by name so
@@ -21,8 +22,18 @@ echo "Stopping and removing containers + declared volumes..."
 docker compose down -v --remove-orphans
 
 echo
-echo "Removing images (govec, govec-scalar, chroma, qdrant)..."
+echo "Removing images (govec, chroma, qdrant)..."
 docker compose down --rmi all >/dev/null 2>&1 || true
+
+echo
+echo "Removing GoVec images built from commits (govec-bench/govec)..."
+built_images=$(docker image ls -q govec-bench/govec | sort -u)
+if [[ -n "${built_images}" ]]; then
+  # shellcheck disable=SC2086 -- one ID per word
+  docker image rm -f ${built_images}
+else
+  echo "  none found"
+fi
 #docker image rm -f chromadb/chroma:latest qdrant/qdrant:latest 2>/dev/null || true
 
 echo

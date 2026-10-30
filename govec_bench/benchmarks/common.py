@@ -11,6 +11,7 @@ from typing import NamedTuple
 
 from govec_bench.adapters.base import VectorDBAdapter
 from govec_bench.adapters.registry import DATABASES, Database, select_databases
+from govec_bench.benchmarks.images import GovecImage, resolve_govec_image
 from govec_bench.datasets.base import ArrayItems
 from govec_bench.datasets.registry import DATASETS, SIZES, DatasetSizes
 
@@ -46,6 +47,19 @@ class BenchArgs(NamedTuple):
     databases: dict[str, Database]
 
 
+# The GoVec image or settings a run asked for, on top of databases.yaml and the pinned image.
+GOVEC_SERVICE = "govec"
+
+
+def _setting(text: str) -> tuple[str, str]:
+    key, sep, value = text.partition("=")
+    if not sep or not key or not value:
+        msg = f"expected KEY=VALUE, got {text!r}"
+        raise argparse.ArgumentTypeError(msg)
+
+    return f"GOVEC_{key.upper()}", value
+
+
 def build_parser() -> argparse.ArgumentParser:
     # The arguments every benchmark shares; a benchmark with its own adds them to this parser.
     parser = argparse.ArgumentParser()
@@ -56,6 +70,26 @@ def build_parser() -> argparse.ArgumentParser:
         choices=list(DATABASES),
         help="run only this database; repeat for several (default: all)",
     )
+    parser.add_argument(
+        "--govec",
+        metavar="REF",
+        help=(
+            "run GoVec from this instead of the pinned image: an image (anything with a colon, "
+            "e.g. govec:local) or a git ref of the GoVec repo (HEAD, v0.2.1, a branch), built from "
+            "a clean copy of that commit"
+        ),
+    )
+    parser.add_argument(
+        "--set",
+        action="append",
+        type=_setting,
+        dest="settings",
+        metavar="KEY=VALUE",
+        help=(
+            "change a GoVec setting for this run: a key of govec-config.yaml as its environment "
+            "variable without GOVEC_, e.g. hnsw_ef_construction=200; repeat for several"
+        ),
+    )
     return parser
 
 
@@ -63,8 +97,27 @@ def add_size_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--size", choices=SIZES, default="small", help="10k (small) or 100k (large) base vectors")
 
 
+def with_govec(databases: dict[str, Database], image_ref: str | None, settings: dict[str, str]) -> dict[str, Database]:
+    # Applied to every GoVec database in the run; the others have no GoVec image or settings.
+    if not image_ref and not settings:
+        return databases
+
+    if not any(database.service == GOVEC_SERVICE for database in databases.values()):
+        msg = "--govec and --set change GoVec, but no GoVec database is selected"
+        raise SystemExit(msg)
+
+    return {
+        name: database._replace(env={**database.env, **settings}, image_ref=image_ref)
+        if database.service == GOVEC_SERVICE
+        else database
+        for name, database in databases.items()
+    }
+
+
 def to_bench_args(args: argparse.Namespace) -> BenchArgs:
-    return BenchArgs(dataset=DATASETS[args.dataset], databases=select_databases(args.db))
+    databases = with_govec(select_databases(args.db), args.govec, dict(args.settings or []))
+
+    return BenchArgs(dataset=DATASETS[args.dataset], databases=databases)
 
 
 def parse_args(argv: Sequence[str] | None = None) -> BenchArgs:
@@ -155,36 +208,84 @@ def wait_until_queryable(build_adapter: Callable[[], VectorDBAdapter], timeout_s
     raise TimeoutError(msg)
 
 
-def render_override(service: str, environment: dict[str, str]) -> str:
+def render_override(service: str, settings: dict[str, object]) -> str:
     # JSON is valid YAML, so Compose reads this as an override file without a YAML dependency.
-    return json.dumps({"services": {service: {"environment": environment}}}, indent=2)
+    return json.dumps({"services": {service: settings}}, indent=2)
+
+
+# What each database ran as, filled in by running_alone() from the started container, for the
+# results file: the image docker-compose.yml pins is only what was asked for.
+STARTED: dict[str, dict[str, object]] = {}
+
+
+def _check_started(database: Database, environment: dict[str, str], govec_image: GovecImage | None) -> None:
+    # Proof the settings reached the container: a typo would otherwise start it on its config
+    # file's values, and every result would measure the setup it was meant to change.
+    (inspected,) = json.loads(docker("inspect", container_of(database.service)).stdout)
+    env = set(inspected["Config"]["Env"] or [])
+
+    missing = [f"{key}={value}" for key, value in environment.items() if f"{key}={value}" not in env]
+    if missing:
+        msg = f"{database.name} started without {missing}"
+        raise RuntimeError(msg)
+
+    image = inspected["Config"]["Image"]
+    if govec_image is not None and image != govec_image.image:
+        msg = f"{database.name} started on {image}, not {govec_image.image}"
+        raise RuntimeError(msg)
+
+    # The database's own settings, not what one start varies (the ef sweep's ef): a benchmark
+    # that varies a setting records it with each measurement.
+    STARTED[database.name] = {
+        "service": database.service,
+        "image": image,
+        "image_id": inspected["Image"],
+        "govec_commit": govec_image.commit if govec_image else None,
+        "env": database.env,
+    }
+
+
+def setup_of(databases: dict[str, Database]) -> dict[str, object]:
+    # For the results file: what each database that started ran as.
+    return {name: STARTED[name] for name in databases if name in STARTED}
 
 
 @contextmanager
 def running_alone(
-    service: str, database: Database, overrides: Sequence[Path] = (), dimensions: int | None = None
+    database: Database, env: dict[str, str] | None = None, dimensions: int | None = None
 ) -> Iterator[VectorDBAdapter]:
     # Only the database under test runs. Idle neighbours still work in the background (Chroma
     # compacts, Qdrant optimizes, Go collects garbage) and hold their loaded data in the same
     # Docker VM; at 2 CPUs each, four containers claim every core of an 8-core laptop. Each
     # database starts from a fresh container and empty volumes, and leaves none behind.
-    # overrides are Compose files layered over docker-compose.yml for this start only, so a
-    # benchmark can change a service's settings without editing the published file.
-    with tempfile.TemporaryDirectory() as tmp:
-        layered = list(overrides)
-        if database.needs_dimensions:
-            if dimensions is None:
-                msg = f"{service} must be told the vector width at startup: pass the dataset's dimensions"
-                raise ValueError(msg)
-            dims_override = Path(tmp) / "dimensions.override.yml"
-            dims_override.write_text(render_override(service, {"GOVEC_DIMENSIONS": str(dimensions)}))
-            layered.append(dims_override)
+    # Its settings, plus env for this start only, go in a Compose file layered over
+    # docker-compose.yml, so no setup needs a service or config file of its own.
+    environment = {**database.env, **(env or {})}
+    if database.needs_dimensions:
+        if dimensions is None:
+            msg = f"{database.name} must be told the vector width at startup: pass the dataset's dimensions"
+            raise ValueError(msg)
+        environment["GOVEC_DIMENSIONS"] = str(dimensions)
 
-        files = [arg for path in (COMPOSE_FILE, *layered) for arg in ("--file", str(path))] if layered else []
+    govec_image = resolve_govec_image(database.image_ref) if database.image_ref else None
+
+    settings: dict[str, object] = {}
+    if environment:
+        settings["environment"] = environment
+    if govec_image is not None:
+        settings["image"] = govec_image.image
+
+    with tempfile.TemporaryDirectory() as tmp:
+        files = []
+        if settings:
+            override = Path(tmp) / "run.override.yml"
+            override.write_text(render_override(database.service, settings))
+            files = ["--file", str(COMPOSE_FILE), "--file", str(override)]
 
         compose("down", "--volumes")
-        compose(*files, "up", "--detach", service)
+        compose(*files, "up", "--detach", database.service)
         try:
+            _check_started(database, environment, govec_image)
             wait_until_queryable(database.build_adapter, START_TIMEOUT_S)
 
             yield database.build_adapter()
