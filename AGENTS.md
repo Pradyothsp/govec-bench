@@ -29,6 +29,8 @@ several "GoVec wins" here have turned out to be measurement errors.
 | `task bench:sweep` | Recall@k against query latency per search ef (`-- --ef 50 --ef 100 --k 10` to narrow); GoVec, Chroma and Qdrant unless `--db` says otherwise (`--db govec-scalar` adds int8); not part of `bench:all` |
 | `task bench:insert -- --db govec --set hnsw_ef_construction=200` | Any benchmark with a GoVec setting changed for one run: a key of `govec-config.yaml` as its `GOVEC_` variable without the prefix; repeat `--set` for several. Here `ef_construction=200`, GoVec's default up to 0.2.0 |
 | `task bench:pipeline -- --db govec-mmap --govec HEAD` | Run GoVec from a commit of the GoVec repo (`../govec`, or `GOVEC_REPO`) instead of the pin: built once from a clean copy, tagged `govec-bench/govec:<commit>`. Any image works too (`--govec govec:local`, `--govec ghcr.io/pradyothsp/govec:0.2.1`). For development comparisons; published numbers use the pin |
+| `task results:import` | Index results files into `results/bench.db` (each benchmark also indexes its own file as it writes it); `-- ../govec-notes/bench` adds older sessions. Safe to repeat: a file already indexed, from anywhere, is skipped |
+| `task results:runs` | List indexed runs, newest first, with what each database ran as; `-- --benchmark pipeline --database govec-mmap` to narrow |
 | `task test` | Unit tests |
 | `task fmt` / `task fmt:check` | Format and autofix / ruff + ty + format check |
 | `task docker:clean` | Remove this project's containers, images and volumes |
@@ -56,7 +58,10 @@ govec_bench/
     dbpedia.py         DBpedia 10k/100k: OpenAI ada-002 text embeddings, 1536-dim, from Parquet
     registry.py        --dataset name -> (10k loader, 100k loader, dimensions); Size and load_sized()
     groundtruth.py     exact cosine neighbours by brute force: the recall answer key
-  results.py           latency/recall statistics and the JSON results writer
+  results.py           latency/recall statistics and the JSON results writer, which also indexes each file
+  store.py             results/bench.db: every results file as rows (runs, what each database ran as,
+                       one row per metric under a dotted name); an index over the JSON, rebuildable
+  cli.py               commands over the results (python -m govec_bench.cli): import, runs
 docker-compose.yml     one service per engine, pinned images, 2 CPU / 2 GB each
 databases.yaml         every database by name: its engine and the settings it changes (GOVEC_ variables)
 govec-config.yaml      GoVec's config; each GoVec database changes it through environment variables

@@ -194,7 +194,9 @@ DATASET=dbpedia SIZE=large task bench:pipeline   # everything at 100k text embed
 ```
 
 Each benchmark writes `results/<benchmark>_<timestamp>.json`, with one section per database and
-what each ran as (image, image ID, settings) under `setup`.
+what each ran as (image, image ID, settings) under `setup`, and indexes it in `results/bench.db`
+(SQLite: one row per metric per database per run). `task results:import` rebuilds that index from
+the files, and `task results:runs` lists what's in it.
 Run single benchmarks with `task bench:insert`, `bench:query`, `bench:recall`, `bench:memory` or
 `bench:coldstart`.
 Add `-- --db govec --db chroma` to run only some databases. The databases are listed in

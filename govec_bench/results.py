@@ -1,10 +1,17 @@
 import json
+import sqlite3
 import statistics
+import warnings
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from govec_bench.store import import_paths
+
 RESULTS_DIR = Path("results")
+
+# The index over every results file (store.py); rebuilt with `task results:import`.
+RESULTS_DB = RESULTS_DIR / "bench.db"
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,5 +61,11 @@ def write_results(
 
     path = RESULTS_DIR / f"{benchmark}_{timestamp.strftime('%Y%m%dT%H%M%SZ')}.json"
     path.write_text(json.dumps(payload, indent=2))
+
+    # The file is the record; failing to index it loses nothing, `task results:import` retries.
+    try:
+        import_paths(RESULTS_DB, [path])
+    except sqlite3.Error as exc:
+        warnings.warn(f"wrote {path} but couldn't add it to {RESULTS_DB}: {exc}", stacklevel=2)
 
     return path

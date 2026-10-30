@@ -74,6 +74,7 @@ convention = "google"
 
 "scripts/*" = ["T201"]
 "govec_bench/benchmarks/*" = ["T201"]
+"govec_bench/cli.py" = ["T201"]
 
 [tool.ruff.format]
 quote-style = "double"
