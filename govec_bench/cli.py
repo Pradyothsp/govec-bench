@@ -4,6 +4,7 @@ import [PATH ...]   index results files (default: results/, the published ones i
                     folders are searched, so `import ../govec-notes/bench` adds older sessions
 runs                list indexed runs, newest first, with what each database ran as
 run EXPERIMENT      run an experiment's rounds (benchmarks/experiment.py); --dry-run shows the plan
+compare SESSION     what a session found, per metric: each arm's median and range, change, verdict
 """
 
 import argparse
@@ -14,6 +15,7 @@ from contextlib import closing
 from pathlib import Path
 
 from govec_bench.benchmarks.experiment import add_run_arguments, find_experiment, load_experiment, run_experiment
+from govec_bench.compare import PUBLISHED, compare
 from govec_bench.results import RESULTS_DB, RESULTS_DIR
 from govec_bench.store import connect, import_paths
 
@@ -66,6 +68,19 @@ def _run(args: argparse.Namespace) -> None:
     run_experiment(experiment, args.rounds, dry_run=args.dry_run)
 
 
+def _compare(args: argparse.Namespace) -> None:
+    with closing(connect(args.db)) as db:
+        lines = compare(
+            db,
+            args.session,
+            control=args.control,
+            baseline=args.baseline,
+            patterns=args.metric or (),
+            every=args.all,
+        )
+    print("\n".join(lines))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="bench")
     parser.add_argument("--db", type=Path, default=RESULTS_DB, help=f"the results index (default: {RESULTS_DB})")
@@ -84,6 +99,20 @@ def build_parser() -> argparse.ArgumentParser:
     running = commands.add_parser("run", help="run an experiment's rounds")
     add_run_arguments(running)
     running.set_defaults(handler=_run)
+
+    comparing = commands.add_parser("compare", help="what a session found, metric by metric")
+    comparing.add_argument(
+        "session", help="an experiment (its latest session), experiment/session, or a session's folder"
+    )
+    comparing.add_argument("--control", help="the arm the others are compared to (default: round 1's first)")
+    comparing.add_argument(
+        "--baseline", help=f"an earlier session to compare each arm with, or {PUBLISHED!r} for the README's runs"
+    )
+    comparing.add_argument(
+        "--metric", action="append", help="only metrics matching this pattern (queries_grpc.*); repeat for several"
+    )
+    comparing.add_argument("--all", action="store_true", help="every metric stored, not only the headline ones")
+    comparing.set_defaults(handler=_compare)
 
     return parser
 

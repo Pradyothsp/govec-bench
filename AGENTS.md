@@ -30,6 +30,7 @@ several "GoVec wins" here have turned out to be measurement errors.
 | `task bench:insert -- --db govec --set hnsw_ef_construction=200` | Any benchmark with a GoVec setting changed for one run: a key of `govec-config.yaml` as its `GOVEC_` variable without the prefix; repeat `--set` for several. Here `ef_construction=200`, GoVec's default up to 0.2.0 |
 | `task bench:pipeline -- --db govec-mmap --govec HEAD` | Run GoVec from a commit of the GoVec repo (`../govec`, or `GOVEC_REPO`) instead of the pin: built once from a clean copy, tagged `govec-bench/govec:<commit>`. Any image works too (`--govec govec:local`, `--govec ghcr.io/pradyothsp/govec:0.2.1`). For development comparisons; published numbers use the pin |
 | `task bench:run EXPERIMENT=mmap-0.2.1-vs-head` | Run an experiment from `experiments/`: arms (a database, and for GoVec an image or commit and settings) run through the whole pipeline in rounds, the order alternating or shuffled between rounds. It starts Docker, builds images and the workload before round 1, keeps the Mac awake and waits for Docker's disk between 100k runs. One session's results files, `session.json` and `run.log` go in `results/sessions/<experiment>/<started>/`. `-- --dry-run` shows the plan and each arm's commit; `-- --rounds 1` overrides the file |
+| `task results:compare SESSION=mmap-0.2.1-vs-head` | What a session found: per metric, each arm's median and range, the change against the control (round 1's first arm, or `--control`) and a verdict that says better only when every run beat every control run (`level` under 1%). Headline metrics by default; `--metric 'queries_grpc.*'` or `--all` for more. `--baseline <session>` or `--baseline published` adds each arm against that, marking arms that ran the same image and settings in both, since their change is the sessions' drift. SESSION is an experiment (its latest session), `experiment/session` or a session folder |
 | `task results:import` | Index results files into `results/bench.db` (each benchmark also indexes its own file as it writes it); `-- ../govec-notes/bench` adds older sessions. Safe to repeat: a file already indexed, from anywhere, is skipped |
 | `task results:runs` | List indexed runs, newest first, with what each database ran as; `-- --benchmark pipeline --database govec-mmap` to narrow |
 | `task test` | Unit tests |
@@ -62,9 +63,10 @@ govec_bench/
     groundtruth.py     exact cosine neighbours by brute force: the recall answer key
   results.py           latency/recall statistics and the JSON results writer, which also indexes each file
   results_file.py      a results file's shape, as TypedDicts: what each database ran as, the run's tag
+  compare.py           bench compare: a session's arms per metric, from bench.db; HEADLINE is its rows
   store.py             results/bench.db: every results file as rows (runs, what each database ran as,
                        one row per metric under a dotted name); an index over the JSON, rebuildable
-  cli.py               the bench commands (python -m govec_bench.cli): import, runs, run
+  cli.py               the bench commands (python -m govec_bench.cli): import, runs, run, compare
 docker-compose.yml     one service per engine, pinned images, 2 CPU / 2 GB each
 databases.yaml         every database by name: its engine and the settings it changes (GOVEC_ variables)
 experiments/           comparisons as files, for bench run: arms, rounds, order, dataset and size

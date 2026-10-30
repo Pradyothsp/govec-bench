@@ -206,7 +206,8 @@ few settings over `govec-config.yaml`. `--set KEY=VALUE` changes a GoVec setting
 A comparison run over several rounds in one session (a GoVec release against a newer commit, say)
 is a file in `experiments/`, run with `task bench:run EXPERIMENT=<name>`: each round runs every
 arm through the pipeline, in an order that alternates between rounds, and the session's files go in
-`results/sessions/`.
+`results/sessions/`. `task results:compare SESSION=<name>` then gives each arm's median and range
+per metric, the change, and whether every run was better or the runs overlap.
 
 ## Run-to-run variation
 

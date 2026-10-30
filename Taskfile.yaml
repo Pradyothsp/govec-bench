@@ -120,6 +120,12 @@ tasks:
       - results-runs
     cmd: uv run python -m govec_bench.cli runs {{.CLI_ARGS}}
 
+  results:compare:
+    desc: What an experiment session found, per metric (SESSION=an experiment, experiment/session or a folder; -- --baseline published)
+    aliases:
+      - results-compare
+    cmd: uv run python -m govec_bench.cli compare {{.SESSION}} {{.CLI_ARGS}}
+
   bench:coldstart:
     desc: Cold start benchmark
     aliases:
