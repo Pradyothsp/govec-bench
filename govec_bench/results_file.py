@@ -29,3 +29,4 @@ class ResultsFile(TypedDict):
     # By database (or ef sweep series) name: whatever that benchmark measured, as JSON.
     results: dict[str, object]
     experiment: NotRequired[RunTag]
+    steps: NotRequired[list[str]]  # the pipeline steps that ran, when not all of them

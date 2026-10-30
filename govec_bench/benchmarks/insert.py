@@ -1,12 +1,11 @@
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 
 from tqdm import tqdm
 
 from govec_bench.adapters.base import VectorDBAdapter
-from govec_bench.benchmarks.common import parse_args, running_alone, setup_of
 from govec_bench.datasets.base import ArrayItems
-from govec_bench.results import LatencyStats, compute_latency_stats, write_results
+from govec_bench.results import LatencyStats, compute_latency_stats
 
 BATCH_SIZE = 100
 
@@ -63,31 +62,3 @@ def measure_batch_insert(adapter: VectorDBAdapter, items: ArrayItems, batch_size
     total_s = time.perf_counter() - load_start
 
     return build_insert_stats(total_s, len(items), latencies_ms)
-
-
-def main() -> None:
-    args = parse_args()
-    dataset = args.dataset.small()
-
-    results: dict[str, object] = {}
-    for name, database in args.databases.items():
-        print(f"Measuring insert latency: {name}...")
-        with running_alone(database, dimensions=args.dataset.dimensions) as adapter:
-            single_stats = measure_single_insert(adapter, dataset.base)
-
-            adapter.reset()
-            batch_stats = measure_batch_insert(adapter, dataset.base, BATCH_SIZE)
-
-        results[name] = {
-            "single": asdict(single_stats),
-            "batch": asdict(batch_stats),
-        }
-
-    path = write_results(
-        benchmark="insert_latency", dataset=dataset.name, results=results, setup=setup_of(args.databases)
-    )
-    print(f"Wrote {path}")
-
-
-if __name__ == "__main__":
-    main()

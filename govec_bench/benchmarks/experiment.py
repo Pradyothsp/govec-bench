@@ -1,7 +1,8 @@
 """A comparison as a file, run in rounds: `bench run experiments/<name>.yaml`.
 
 An experiment names its arms (a database, and for GoVec the code and settings it runs) and how many
-rounds to run them. Each round runs every arm through the whole pipeline, one at a time, in an
+rounds to run them. Each round runs every arm through the pipeline (all of it, or the steps it
+names, with what they need), one at a time, in an
 order that changes between rounds, so drift over a session (heat, background load) doesn't land
 on one arm. One session's files go in results/sessions/<experiment>/<started>/: a results file per
 arm per round, session.json (the plan, what ran, the machine and commits) and run.log.
@@ -11,6 +12,7 @@ arm per round, session.json (the plan, what ran, the machine and commits) and ru
     size: large                 # small (10k) or large (100k)
     rounds: 3
     order: alternate            # alternate (file order, then reversed), shuffle, or fixed
+    steps: [restart-loaded]     # optional: only these pipeline steps (pipeline.MEASUREMENTS)
     arms:
       - name: v0.2.1
         database: govec-mmap    # a database in databases.yaml, opt-in ones included
@@ -51,7 +53,15 @@ from govec_bench.benchmarks.common import (
     shortfalls,
 )
 from govec_bench.benchmarks.images import describe_govec_ref, resolve_govec_image
-from govec_bench.benchmarks.pipeline import Workload, build_workload, measure_database
+from govec_bench.benchmarks.pipeline import (
+    PIPELINE,
+    Stage,
+    Workload,
+    build_workload,
+    measure_database,
+    select_steps,
+    steps_of,
+)
 from govec_bench.datasets.registry import DATASETS, SIZES, Size
 from govec_bench.events import Event, EventLog
 from govec_bench.results import RESULTS_DIR, write_results
@@ -72,7 +82,7 @@ DISK_POLL_S = 30
 DOCKER_START_S = 5 * 60
 DOCKER_SETTLE_S = 30  # the VM is still busy for a while after `docker info` first answers
 
-_EXPERIMENT_KEYS = {"description", "dataset", "size", "rounds", "order", "arms"}
+_EXPERIMENT_KEYS = {"description", "dataset", "size", "rounds", "order", "steps", "arms"}
 _ARM_KEYS = {"name", "database", "govec", "set"}
 
 
@@ -89,6 +99,10 @@ class Experiment(NamedTuple):
     rounds: int
     order: str
     arms: tuple[Arm, ...]
+    steps: tuple[str, ...] | None = None  # None: the whole pipeline
+
+    def pipeline(self) -> list[Stage]:
+        return select_steps(PIPELINE, self.steps) if self.steps else list(PIPELINE)
 
 
 def _arm(index: int, entry: object) -> Arm:
@@ -160,7 +174,23 @@ def parse_experiment(name: str, text: str) -> Experiment:
         msg = f"{name}: arm names must be unique, {duplicates} repeat"
         raise ValueError(msg)
 
-    return Experiment(name, str(spec.get("description", "")), dataset, size, rounds, order, arms)
+    description = str(spec.get("description", ""))
+    return Experiment(name, description, dataset, size, rounds, order, arms, _steps(name, spec.get("steps")))
+
+
+def _steps(name: str, steps: object) -> tuple[str, ...] | None:
+    if steps is None:
+        return None
+    names = tuple(str(step) for step in steps) if isinstance(steps, list) else ()
+    if not names:
+        msg = f"{name}: steps should be a list of pipeline steps, got {steps!r}"
+        raise ValueError(msg)
+    try:
+        select_steps(PIPELINE, names)
+    except ValueError as exc:
+        msg = f"{name}: {exc}"
+        raise ValueError(msg) from None
+    return names
 
 
 def find_experiment(path_or_name: str) -> Path:
@@ -369,6 +399,7 @@ class SessionRecord:
     dataset: str
     size: Size
     arms: dict[str, ArmSetup]
+    steps: list[str]  # the pipeline steps each run runs
     plan: list[list[str]]
     machine: Machine
     govec_bench: BenchCommit
@@ -397,6 +428,7 @@ class Session:
                 arm.name: ArmSetup(arm.database.name, arm.database.image_ref, arm.database.env)
                 for arm in experiment.arms
             },
+            steps=steps_of(experiment.pipeline()),
             plan=rounds,
             machine=machine(),
             govec_bench=bench_commit(),
@@ -441,7 +473,7 @@ def run_arm(
 
     # An arm that fails before its container starts mustn't be recorded as the last one that did.
     STARTED.pop(database.name, None)
-    payload = measure_database(database, workload, position, progress)
+    payload = measure_database(database, workload, position, progress, experiment.pipeline())
 
     path = write_results(
         benchmark="pipeline",
@@ -453,6 +485,7 @@ def run_arm(
         ),
         directory=session.directory,
         name=f"r{round_number}-{arm.name}",
+        steps=list(experiment.steps) if experiment.steps else None,
     )
 
     run.file, run.finished = path.name, _now()
@@ -487,6 +520,8 @@ def run_rounds(session: Session, rounds: list[list[str]], workload: Workload, da
 def describe(experiment: Experiment, rounds: list[list[str]]) -> None:
     print(f"{experiment.name}: {experiment.description}".rstrip(": "))
     print(f"  {experiment.dataset} {experiment.size}, {len(rounds)} rounds, order {experiment.order}")
+    if experiment.steps:
+        print(f"  steps: {', '.join(steps_of(experiment.pipeline()))}")
     for arm in experiment.arms:
         database = arm.database
         image = describe_govec_ref(database.image_ref) if database.image_ref else "the image docker-compose.yml pins"

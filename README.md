@@ -145,7 +145,7 @@ What the numbers say:
 | ef sweep | 10k vectors | Recall@10 and @50 and query latency at search ef 25, 50, 100, 200, 400 (`task bench:sweep`) |
 
 `task bench:pipeline` runs all of these from one load per database at either size (`SIZE=large`
-for 100k), so every number describes the same index; the per-benchmark tasks run one at a time.
+for 100k), so every number describes the same index; `--steps` runs only some of them.
 
 Two datasets, chosen with `DATASET=sift` (the default) or `DATASET=dbpedia`:
 
@@ -188,17 +188,17 @@ cd govec-bench
 uv sync --all-groups
 
 task data:download     # SIFT10K and SIFT1M into data/raw/ (DATASET=dbpedia for DBpedia)
-task bench:all         # all five benchmarks; each starts one database at a time
+task bench:pipeline    # every measurement on SIFT 10k; starts one database at a time
 task bench:sweep       # recall against latency across search ef
 DATASET=dbpedia SIZE=large task bench:pipeline   # everything at 100k text embeddings
 ```
 
-Each benchmark writes `results/<benchmark>_<timestamp>.json`, with one section per database and
+The pipeline writes `results/pipeline_<timestamp>.json`, with one section per database and
 what each ran as (image, image ID, settings) under `setup`, and indexes it in `results/bench.db`
 (SQLite: one row per metric per database per run). `task results:import` rebuilds that index from
 the files, and `task results:runs` lists what's in it.
-Run single benchmarks with `task bench:insert`, `bench:query`, `bench:recall`, `bench:memory` or
-`bench:coldstart`.
+`task bench:insert`, `bench:query`, `bench:memory` and `bench:coldstart` run only those steps of the
+pipeline (`-- --steps queries,memory` picks any), with what they need.
 Add `-- --db govec --db chroma` to run only some databases. The databases are listed in
 `databases.yaml`: GoVec's variants (int8, memory-mapped, brute force) are entries there, each a
 few settings over `govec-config.yaml`. `--set KEY=VALUE` changes a GoVec setting for one run.

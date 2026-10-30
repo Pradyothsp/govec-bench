@@ -2,17 +2,7 @@ import time
 from dataclasses import asdict, dataclass
 from typing import NamedTuple
 
-from govec_bench.adapters.govec_adapter import GovecAdapter
-from govec_bench.benchmarks.common import (
-    container_of,
-    docker,
-    load_dataset,
-    parse_args,
-    require_free_disk,
-    running_alone,
-    setup_of,
-)
-from govec_bench.results import write_results
+from govec_bench.benchmarks.common import docker
 
 # RAM checkpoints, seconds after the load finishes. Not a single "settled"
 # snapshot: govec's RSS drops sharply over the first few minutes post-load as
@@ -200,38 +190,3 @@ def memory_result_to_json(result: MemoryResult) -> dict[str, object]:
         "delta_ram_bytes_peak": result.delta_ram_bytes_peak,
         "delta_ram_bytes_last_sample": result.delta_ram_bytes_last_sample,
     }
-
-
-def main() -> None:
-    args = parse_args()
-    require_free_disk()
-    dataset = args.dataset.large()
-
-    results: dict[str, object] = {}
-    for name, database in args.databases.items():
-        # running_alone() starts each database on empty volumes: Chroma's own reset() leaves
-        # orphaned collection directories on disk (382MB of them once), so a reused volume would
-        # make the disk numbers meaningless.
-        with running_alone(database, dimensions=args.dataset.dimensions) as adapter:
-            container = container_of(database.service)
-            baseline = measure_footprint(container, database.disk_paths)
-
-            print(f"Loading {len(dataset.base)} vectors into {name}...")
-            load_dataset(adapter, dataset.base)
-            if isinstance(adapter, GovecAdapter):
-                adapter.flush()  # compact the WAL into the on-disk snapshot before measuring
-
-            print("Waiting for the on-disk footprint to stabilize (background segment merges/vacuums)...")
-            disk_after = stable_disk_usage(container, database.disk_paths)
-
-            print(f"Sampling RAM at t={RAM_SAMPLE_DELAYS_S}s after load...")
-            ram_series = sample_ram_series(container)
-
-        results[name] = memory_result_to_json(build_memory_result(baseline, disk_after, ram_series))
-
-    path = write_results(benchmark="memory", dataset=dataset.name, results=results, setup=setup_of(args.databases))
-    print(f"Wrote {path}")
-
-
-if __name__ == "__main__":
-    main()

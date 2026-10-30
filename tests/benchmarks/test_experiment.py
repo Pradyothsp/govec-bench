@@ -66,6 +66,8 @@ def test_parse_experiment__arms__database_with_the_arms_image_and_settings() -> 
         ("arms: [{name: a, database: govec}]\norder: random", "order 'random'"),
         ("arms: [{name: a, database: govec}]\nrounds: 0", "positive number"),
         ("arms: [{name: a, database: govec}]\nround: 3", "unknown keys ['round']"),
+        ("arms: [{name: a, database: govec}]\nsteps: [restarts]", "no step restarts"),
+        ("arms: [{name: a, database: govec}]\nsteps: restart-loaded", "should be a list"),
         ("dataset: sift", "needs a list of arms"),
     ],
 )
@@ -111,7 +113,7 @@ def test_run_rounds__each_arm_each_round__a_results_file_and_the_session_says_wh
     monkeypatch.setattr(experiment_module, "wait_for_disk", lambda _warn: True)
     measured: list[tuple[str | None, int]] = []
 
-    def fake_measure(database, workload, position, progress):  # noqa: ARG001
+    def fake_measure(database, workload, position, progress, pipeline):  # noqa: ARG001
         measured.append((database.image_ref, position))
         progress("step", "batch insert")
         if database.image_ref == "HEAD" and len(measured) > 2:
@@ -225,3 +227,20 @@ def test_find_session_folder__nothing_running__says_so(tmp_path: Path) -> None:
 
     # Assert
     assert "no session is running" in str(raised.value)
+
+
+def test_parse_experiment__steps__runs_those_and_what_they_need() -> None:
+    # Arrange
+    text = AB + "steps: [restart-loaded]\n"
+
+    # Act
+    experiment = parse_experiment("ab", text)
+
+    # Assert
+    assert experiment.steps == ("restart-loaded",)
+    assert [step.name for stage in experiment.pipeline() for step in stage.steps] == [
+        "batch-insert",
+        "settle",
+        "save",
+        "restart-loaded",
+    ]

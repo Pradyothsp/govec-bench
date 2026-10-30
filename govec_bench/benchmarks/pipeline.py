@@ -10,14 +10,20 @@ number for a database describes the same index. The other two are short: cold st
 loaded, and one-at-a-time inserts, always on the 10k set (100k of them would take most of an hour
 on Chroma and show nothing the 10k set doesn't).
 
-The ef sweep stays separate: GoVec and Chroma need a build per ef.
+Each step has a name, and --steps runs only some (with what they need: the load, for
+anything measured on the loaded index): `--steps memory --size large` is what the memory
+benchmark was, `--steps queries` the query and recall ones. This is the only implementation of
+each measurement, so a fix to one lands in every result.
+
+The ef sweep stays separate: it changes Qdrant's ef on one loaded graph, which arms of an
+experiment (a container each) can't, and it shares the search measurement (search.py).
 """
 
 import argparse
 import random
 import time
 import traceback
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Literal, NamedTuple
 
@@ -26,7 +32,6 @@ from tqdm import tqdm
 from govec_bench.adapters.base import VectorDBAdapter
 from govec_bench.adapters.govec_adapter import GovecAdapter
 from govec_bench.adapters.registry import Database
-from govec_bench.benchmarks.cold_start import measure_cold_start
 from govec_bench.benchmarks.common import (
     POLL_INTERVAL_S,
     BenchArgs,
@@ -38,6 +43,7 @@ from govec_bench.benchmarks.common import (
     running_alone,
     setup_of,
     to_bench_args,
+    wait_until_queryable,
 )
 from govec_bench.benchmarks.insert import BATCH_SIZE, InsertStats, measure_batch_insert, measure_single_insert
 from govec_bench.benchmarks.memory import (
@@ -49,10 +55,11 @@ from govec_bench.benchmarks.memory import (
     sample_ram_series,
     stable_disk_usage,
 )
+from govec_bench.benchmarks.search import measure_search, warm_up
 from govec_bench.datasets.base import ArrayItems
 from govec_bench.datasets.groundtruth import exact_cosine_neighbors
 from govec_bench.datasets.registry import DatasetSizes, Size, load_sized
-from govec_bench.results import LatencyStats, RecallStats, compute_latency_stats, compute_recall_stats, write_results
+from govec_bench.results import LatencyStats, RecallStats, compute_latency_stats, write_results
 from govec_bench.types import NeighborIndices, Vector
 
 K_VALUES = (1, 5, 10, 50)
@@ -61,11 +68,13 @@ RESTARTS = 5
 
 # A restart with 100k vectors loaded reads them all back before it answers; an empty one takes ms.
 LOADED_START_TIMEOUT_S = 300
+EMPTY_START_TIMEOUT_S = 60
 
 
 class PipelineArgs(NamedTuple):
     bench: BenchArgs
     size: Size
+    steps: list[str] | None  # None: every step
 
 
 class Workload(NamedTuple):
@@ -122,8 +131,10 @@ def _no_progress(_kind: Literal["stage", "step"], _label: str) -> None:
 
 
 class Step(NamedTuple):
+    name: str  # what --steps and an experiment's steps call it
     label: str
     run: Callable[[Run], None]
+    needs: tuple[str, ...] = ()  # steps that must run before it in its stage
 
 
 class Stage(NamedTuple):
@@ -134,9 +145,19 @@ class Stage(NamedTuple):
 def parse_pipeline_args(argv: Sequence[str] | None = None) -> PipelineArgs:
     parser = build_parser()
     add_size_argument(parser)
+    parser.add_argument(
+        "--steps",
+        type=lambda text: [name.strip() for name in text.split(",") if name.strip()],
+        help=f"run only these steps, and what they need, comma-separated: {', '.join(MEASUREMENTS)}",
+    )
     args: argparse.Namespace = parser.parse_args(argv)
+    if args.steps is not None:
+        try:
+            select_steps(PIPELINE, args.steps)
+        except ValueError as exc:
+            parser.error(str(exc))
 
-    return PipelineArgs(bench=to_bench_args(args), size=args.size)
+    return PipelineArgs(bench=to_bench_args(args), size=args.size, steps=args.steps)
 
 
 # What each step prints as soon as it has its result.
@@ -218,30 +239,13 @@ def measure_memory(run: Run) -> None:
         )
 
 
-def query_point(adapter: VectorDBAdapter, workload: Workload, k: int) -> QueryPoint:
-    # Each query timed and graded in the same call, so recall and latency describe the same search.
-    latencies_ms = []
-    recalls = []
-    pairs = zip(workload.queries, workload.groundtruth, strict=True)
-    for query, truth in tqdm(pairs, total=len(workload.queries), desc=f"queries k={k}", leave=False):
-        start = time.perf_counter()
-        results = adapter.query(query, k=k)
-        latencies_ms.append((time.perf_counter() - start) * 1000)
-
-        expected = {workload.base.id_at(i) for i in truth[:k]}
-        recalls.append(len(expected & {r.id for r in results}) / k)
-
-    return QueryPoint(k=k, recall=compute_recall_stats(recalls), latency=compute_latency_stats(latencies_ms))
-
-
 def measure_query_points(adapter: VectorDBAdapter, workload: Workload, label: str) -> list[QueryPoint]:
-    # One untimed pass first, so k=1 doesn't also pay for cold caches.
-    for query in tqdm(workload.queries, desc="warm-up", leave=False):
-        adapter.query(query, k=max(K_VALUES))
+    warm_up(adapter, workload.queries, max(K_VALUES))
 
     points = []
     for k in K_VALUES:
-        point = query_point(adapter, workload, k)
+        search = measure_search(adapter, workload.base, workload.queries, workload.groundtruth, k)
+        point = QueryPoint(k=k, recall=search.recall, latency=search.latency)
         points.append(point)
 
         recall = f"recall {point.recall.mean:.4f} (worst {point.recall.min:.2f})"
@@ -280,25 +284,36 @@ def wait_until_answering(build_adapter: Callable[[], VectorDBAdapter], probe: Ve
     raise TimeoutError(msg)
 
 
-def measure_loaded_cold_start(run: Run) -> None:
-    # Timed from before `compose start`, as the empty restarts are: the server boots while it runs.
-    probe = run.workload.queries[0]
+def measure_restarts(service: str, wait: Callable[[], None]) -> LatencyStats:
+    # Timed from before `compose start`: the server boots while that command runs, so starting
+    # the clock after it timed one request.
     latencies_ms = []
     for _ in tqdm(range(RESTARTS), desc="restarts", leave=False):
-        compose("stop", run.database.service)
+        compose("stop", service)
 
         start = time.perf_counter()
-        compose("start", run.database.service)
-        wait_until_answering(run.database.build_adapter, probe, LOADED_START_TIMEOUT_S)
+        compose("start", service)
+        wait()
         latencies_ms.append((time.perf_counter() - start) * 1000)
 
-    run.record.cold_start_loaded = compute_latency_stats(latencies_ms)
+    return compute_latency_stats(latencies_ms)
+
+
+def measure_loaded_cold_start(run: Run) -> None:
+    database, probe = run.database, run.workload.queries[0]
+    run.record.cold_start_loaded = measure_restarts(
+        database.service, lambda: wait_until_answering(database.build_adapter, probe, LOADED_START_TIMEOUT_S)
+    )
 
     show(f"until it answers: {latency_text(run.record.cold_start_loaded)}")
 
 
 def measure_empty_cold_start(run: Run) -> None:
-    run.record.cold_start_empty = measure_cold_start(run.database.service, run.database.build_adapter)
+    # The stage's container is fresh and empty, so every restart restarts an empty index.
+    database = run.database
+    run.record.cold_start_empty = measure_restarts(
+        database.service, lambda: wait_until_queryable(database.build_adapter, EMPTY_START_TIMEOUT_S)
+    )
 
     show(f"until it answers: {latency_text(run.record.cold_start_empty)}")
 
@@ -314,19 +329,52 @@ PIPELINE: list[Stage] = [
     Stage(
         "loaded index",
         [
-            Step("baseline footprint", measure_baseline),
-            Step("batch insert", batch_insert),
-            Step("settle", settle),
-            Step("save", save),
-            Step("disk and RAM (RAM sampled for 60 s)", measure_memory),
-            Step("recall and query latency", measure_queries),
-            Step("recall and query latency over gRPC", measure_queries_grpc),
-            Step(f"{RESTARTS} restarts with the data loaded", measure_loaded_cold_start),
+            Step("baseline", "baseline footprint", measure_baseline),
+            Step("batch-insert", "batch insert", batch_insert),
+            Step("settle", "settle", settle, needs=("batch-insert",)),
+            Step("save", "save", save, needs=("settle",)),
+            Step("memory", "disk and RAM (RAM sampled for 60 s)", measure_memory, needs=("baseline", "save")),
+            Step("queries", "recall and query latency", measure_queries, needs=("settle",)),
+            Step("queries-grpc", "recall and query latency over gRPC", measure_queries_grpc, needs=("settle",)),
+            Step(
+                "restart-loaded",
+                f"{RESTARTS} restarts with the data loaded",
+                measure_loaded_cold_start,
+                needs=("save",),
+            ),
         ],
     ),
-    Stage("empty", [Step(f"{RESTARTS} restarts empty", measure_empty_cold_start)]),
-    Stage("single inserts", [Step("one-at-a-time inserts, 10k", single_insert)]),
+    Stage("empty", [Step("restart-empty", f"{RESTARTS} restarts empty", measure_empty_cold_start)]),
+    Stage("single inserts", [Step("single-insert", "one-at-a-time inserts, 10k", single_insert)]),
 ]
+
+# The steps that measure something; the rest prepare the index for them.
+MEASUREMENTS = ("batch-insert", "memory", "queries", "queries-grpc", "restart-loaded", "restart-empty", "single-insert")
+
+
+def steps_of(pipeline: Sequence[Stage]) -> list[str]:
+    return [step.name for stage in pipeline for step in stage.steps]
+
+
+def select_steps(pipeline: Sequence[Stage], names: Collection[str]) -> list[Stage]:
+    # The named steps and every step they need, in pipeline order; a stage with none is left out,
+    # so its container never starts.
+    steps = {step.name: step for stage in pipeline for step in stage.steps}
+    unknown = sorted(set(names) - set(steps))
+    if unknown:
+        msg = f"no step {', '.join(unknown)}; the steps are {', '.join(steps)}"
+        raise ValueError(msg)
+
+    wanted: set[str] = set()
+    pending = list(names)
+    while pending:
+        name = pending.pop()
+        if name not in wanted:
+            wanted.add(name)
+            pending.extend(steps[name].needs)
+
+    selected = [Stage(stage.label, [step for step in stage.steps if step.name in wanted]) for stage in pipeline]
+    return [stage for stage in selected if stage.steps]
 
 
 def run_pipeline(run: Run, pipeline: Sequence[Stage], progress: Progress = _no_progress) -> None:
@@ -389,14 +437,18 @@ def build_workload(sizes: DatasetSizes, size: Size) -> tuple[str, Workload]:
 
 
 def measure_database(
-    database: Database, workload: Workload, run_position: int, progress: Progress = _no_progress
+    database: Database,
+    workload: Workload,
+    run_position: int,
+    progress: Progress = _no_progress,
+    pipeline: Sequence[Stage] = PIPELINE,
 ) -> dict[str, object]:
     # Every stage for one database. A failure partway is recorded with what came before it, so
     # one database failing doesn't discard the others' results.
     run = Run(database=database, workload=workload)
     error = None
     try:
-        run_pipeline(run, PIPELINE, progress)
+        run_pipeline(run, pipeline, progress)
     except Exception as exc:  # noqa: BLE001 -- recorded in the results instead
         traceback.print_exc()
         error = f"{type(exc).__name__}: {exc}"
@@ -410,6 +462,7 @@ def main() -> None:
         require_free_disk()
     dataset_name, workload = build_workload(args.bench.dataset, args.size)
 
+    pipeline = select_steps(PIPELINE, args.steps) if args.steps else PIPELINE
     databases = args.bench.databases
     order = shuffled(list(databases))
     print(f"Run order: {', '.join(order)}")
@@ -417,11 +470,17 @@ def main() -> None:
     results: dict[str, object] = {}
     for position, name in enumerate(order):
         print(f"{name}:")
-        results[name] = measure_database(databases[name], workload, position)
+        results[name] = measure_database(databases[name], workload, position, pipeline=pipeline)
 
     # Registry order in the file, whatever order they ran in, so every results file lists databases alike.
     results = {name: results[name] for name in databases}
-    path = write_results(benchmark="pipeline", dataset=dataset_name, results=results, setup=setup_of(databases))
+    path = write_results(
+        benchmark="pipeline",
+        dataset=dataset_name,
+        results=results,
+        setup=setup_of(databases),
+        steps=steps_of(pipeline) if args.steps else None,
+    )
     print(f"Wrote {path}")
 
 

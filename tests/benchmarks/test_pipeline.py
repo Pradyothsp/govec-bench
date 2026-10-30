@@ -9,7 +9,9 @@ from govec_bench.benchmarks.pipeline import (
     Record,
     parse_pipeline_args,
     result_to_json,
+    select_steps,
     shuffled,
+    steps_of,
 )
 from govec_bench.datasets.registry import DATASETS
 from govec_bench.results import LatencyStats, RecallStats
@@ -168,3 +170,51 @@ def test_shuffled__database_names__every_name_once() -> None:
     # Assert
     assert sorted(order) == sorted(names)
     assert names == list(select_databases())
+
+
+def test_select_steps__memory__pulls_in_the_load_and_the_baseline_but_no_other_stage() -> None:
+    # Arrange
+    names = ["memory"]
+
+    # Act
+    pipeline = select_steps(PIPELINE, names)
+
+    # Assert
+    assert [stage.label for stage in pipeline] == ["loaded index"]
+    assert steps_of(pipeline) == ["baseline", "batch-insert", "settle", "save", "memory"]
+
+
+def test_select_steps__restart_empty__only_its_stage_starts() -> None:
+    # Arrange
+    names = ["restart-empty"]
+
+    # Act
+    pipeline = select_steps(PIPELINE, names)
+
+    # Assert
+    assert [(stage.label, steps_of([stage])) for stage in pipeline] == [("empty", ["restart-empty"])]
+
+
+def test_select_steps__unknown_step__names_the_steps_there_are() -> None:
+    # Arrange
+    names = ["queries", "recall"]
+
+    # Act
+    with pytest.raises(ValueError, match="no step recall; the steps are baseline, batch-insert") as raised:
+        select_steps(PIPELINE, names)
+
+    # Assert
+    assert "single-insert" in str(raised.value)
+
+
+def test_parse_pipeline_args__steps__comma_separated_and_checked() -> None:
+    # Arrange
+    argv = ["--steps", "queries, single-insert"]
+
+    # Act
+    args = parse_pipeline_args(argv)
+
+    # Assert
+    assert args.steps == ["queries", "single-insert"]
+    with pytest.raises(SystemExit):
+        parse_pipeline_args(["--steps", "recall"])

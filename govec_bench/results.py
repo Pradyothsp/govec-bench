@@ -53,11 +53,13 @@ def write_results(
     setup: Mapping[str, StartedAs] | None = None,
     *,
     experiment: RunTag | None = None,
+    steps: list[str] | None = None,
     directory: Path = RESULTS_DIR,
     name: str | None = None,
 ) -> Path:
     # setup: what each database ran as (image, GoVec commit, settings), from common.setup_of().
     # experiment: which experiment, session, round and arm this run was, when bench run made it.
+    # steps: the pipeline steps that ran, when a run chose some (--steps, an experiment's steps).
     directory.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now(UTC)
@@ -70,6 +72,8 @@ def write_results(
     }
     if experiment is not None:
         payload["experiment"] = experiment
+    if steps is not None:
+        payload["steps"] = steps
 
     path = directory / f"{name or benchmark + '_' + timestamp.strftime('%Y%m%dT%H%M%SZ')}.json"
     path.write_text(json.dumps(payload, indent=2))

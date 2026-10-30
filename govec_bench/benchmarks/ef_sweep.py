@@ -17,7 +17,6 @@ Qdrant's doesn't.
 GoVec is also swept once at ef_construction=200, its default up to 0.2.0, as its own line.
 """
 
-import time
 import traceback
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import AbstractContextManager, contextmanager
@@ -36,9 +35,10 @@ from govec_bench.benchmarks.common import (
     setup_of,
     to_bench_args,
 )
+from govec_bench.benchmarks.search import measure_search, warm_up
 from govec_bench.datasets.base import ArrayItems
 from govec_bench.datasets.groundtruth import exact_cosine_neighbors
-from govec_bench.results import LatencyStats, RecallStats, compute_latency_stats, compute_recall_stats, write_results
+from govec_bench.results import LatencyStats, RecallStats, write_results
 from govec_bench.types import NeighborIndices, Vector
 
 EF_VALUES = (25, 50, 100, 200, 400)
@@ -225,25 +225,12 @@ def govec_env(ef_search: int, ef_construction: int) -> dict[str, str]:
 
 
 def measure_point(adapter: VectorDBAdapter, workload: Workload, ef: int, k: int) -> SweepPoint:
-    latencies_ms = []
-    recalls = []
-    for _ in range(TIMED_PASSES):
-        for query, truth in zip(workload.queries, workload.groundtruth, strict=True):
-            start = time.perf_counter()
-            results = adapter.query(query, k=k)
-            latencies_ms.append((time.perf_counter() - start) * 1000)
-
-            expected = {workload.base.id_at(i) for i in truth[:k]}
-            recalls.append(len(expected & {r.id for r in results}) / k)
-
-    return SweepPoint(ef=ef, k=k, recall=compute_recall_stats(recalls), latency=compute_latency_stats(latencies_ms))
+    search = measure_search(adapter, workload.base, workload.queries, workload.groundtruth, k, passes=TIMED_PASSES)
+    return SweepPoint(ef=ef, k=k, recall=search.recall, latency=search.latency)
 
 
 def measure_ef(adapter: VectorDBAdapter, workload: Workload, ef: int, k_values: Sequence[int]) -> list[SweepPoint]:
-    # One untimed pass first, so the first ef measured doesn't also pay for cold caches.
-    for query in workload.queries:
-        adapter.query(query, k=max(k_values))
-
+    warm_up(adapter, workload.queries, max(k_values))
     return [measure_point(adapter, workload, ef, k) for k in k_values]
 
 

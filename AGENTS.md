@@ -23,10 +23,10 @@ several "GoVec wins" here have turned out to be measurement errors.
 | `task data:download` | Fetch SIFT10K and SIFT1M (SIFT100K is its first 100k vectors); `DATASET=dbpedia` for the text embeddings |
 | `task data:export` | Write DBpedia 10k (`SIZE=large`: 100k) as fvecs/ivecs with its exact top-100 to `data/export/<name>/`, for GoVec's in-repo Go benchmarks (`GOVEC_BENCH_DATA=<that dir>`); `DATASET=sift` for SIFT |
 | `task docker:up` / `task docker:down` | Start / stop all databases, for manual poking; benchmarks start their own |
-| `task bench:all` | Run all five benchmarks; each writes `results/<benchmark>_<timestamp>.json`. `DATASET=dbpedia` switches dataset |
-| `task bench:insert` (`query`, `recall`, `memory`, `coldstart`) | Run one benchmark; `-- --db govec --db qdrant` runs only those databases |
-| `task bench:pipeline` | Every benchmark from one load per database: batch insert, disk and RAM, recall and query latency (GoVec and Qdrant also over gRPC, same index; Chroma has no gRPC client), restarts with data and empty, single inserts on 10k. `SIZE=large` for 100k |
-| `task bench:sweep` | Recall@k against query latency per search ef (`-- --ef 50 --ef 100 --k 10` to narrow); GoVec, Chroma and Qdrant unless `--db` says otherwise (`--db govec-scalar` adds int8); not part of `bench:all` |
+| `task bench:pipeline` (also `bench`, `bench:all`) | Every measurement from one load per database: batch insert, disk and RAM, recall and query latency (GoVec and Qdrant also over gRPC, same index; Chroma has no gRPC client), restarts with data and empty, single inserts on 10k. Writes `results/pipeline_<timestamp>.json`. `SIZE=large` for 100k, `DATASET=dbpedia` for text embeddings, `-- --db govec --db qdrant` for only those databases |
+| `task bench:pipeline -- --steps memory,restart-loaded` | Only those steps, and what they need (the load); a stage with none doesn't start its container. The file lists the steps that ran under `steps`. Steps: `batch-insert`, `memory`, `queries`, `queries-grpc`, `restart-loaded`, `restart-empty`, `single-insert`. An experiment takes `steps:` the same way |
+| `task bench:insert` (`query`/`recall`, `memory`, `coldstart`) | The pipeline with the steps each standalone benchmark used to be: inserts; recall and latency from the same searches; disk and RAM at 100k; restarts |
+| `task bench:sweep` | Recall@k against query latency per search ef (`-- --ef 50 --ef 100 --k 10` to narrow); GoVec, Chroma and Qdrant unless `--db` says otherwise (`--db govec-scalar` adds int8); not part of the pipeline: it changes Qdrant's ef on one loaded graph, which a step can't |
 | `task bench:insert -- --db govec --set hnsw_ef_construction=200` | Any benchmark with a GoVec setting changed for one run: a key of `govec-config.yaml` as its `GOVEC_` variable without the prefix; repeat `--set` for several. Here `ef_construction=200`, GoVec's default up to 0.2.0 |
 | `task bench:pipeline -- --db govec-mmap --govec HEAD` | Run GoVec from a commit of the GoVec repo (`../govec`, or `GOVEC_REPO`) instead of the pin: built once from a clean copy, tagged `govec-bench/govec:<commit>`. Any image works too (`--govec govec:local`, `--govec ghcr.io/pradyothsp/govec:0.2.1`). For development comparisons; published numbers use the pin |
 | `task bench:run EXPERIMENT=mmap-0.2.1-vs-head` | Run an experiment from `experiments/`: arms (a database, and for GoVec an image or commit and settings) run through the whole pipeline in rounds, the order alternating or shuffled between rounds. It starts Docker, builds images and the workload before round 1, keeps the Mac awake and waits for Docker's disk between 100k runs. One session's results files, `session.json`, `events.jsonl` and `run.log` go in `results/sessions/<experiment>/<started>/`. In a terminal it opens the live view and runs the session in a process of its own: `q` leaves the run going, `s` twice stops it as Ctrl-C would. `-- --plain` prints instead; `-- --baseline published` adds a baseline to the live table; `-- --dry-run` shows the plan and each arm's commit; `-- --rounds 1` overrides the file |
@@ -50,10 +50,12 @@ govec_bench/
     registry.py        ENGINES: one per compose service (adapter, disk paths, gRPC client); DATABASES,
                        read from databases.yaml: each database's engine and settings, whether it needs
                        the dimension at startup, whether it's opt-in (govec-mmap, govec-brute)
-  benchmarks/          one script per benchmark; common.py has arguments (--db, --govec, --set), dataset
-                       loading, docker helpers and running_alone(), which runs one database's container
-                       at a time with its settings and image layered on, and checks they reached it
-                       pipeline.py runs them all from one load: PIPELINE is a list of stages of steps
+  benchmarks/          common.py has arguments (--db, --govec, --set), dataset loading, docker helpers
+                       and running_alone(), which runs one database's container at a time with its
+                       settings and image layered on, and checks they reached it
+                       pipeline.py is every measurement from one load: PIPELINE is a list of stages of
+                       named steps, --steps picks some; insert.py, memory.py and search.py measure
+                       for its steps (search.py also for ef_sweep.py, the one benchmark of its own)
                        images.py turns --govec into an image, building a GoVec commit when given one
                        experiment.py runs an experiment file's arms in rounds (bench run)
   datasets/
@@ -142,7 +144,7 @@ the settings as environment variables. Nothing else: it runs as the engine's ser
 - **Grade recall against the metric the databases search with.** Every database here runs
   cosine, but SIFT's shipped ground truth is Euclidean. The two disagree on near-ties, so the
   shipped file marked correct cosine answers wrong, capped even a perfect search at 98.0%
-  recall@1, and understated every database by up to 2 points. `recall.py` now computes exact
+  recall@1, and understated every database by up to 2 points. `search.py` grades against exact
   cosine neighbours by brute force (`datasets/groundtruth.py`). If you change a metric, change
   the key with it.
 - **A GoVec snapshot overrides the configured `ef_search` (up to 0.2.0; fixed after).** The snapshot stores the graph's
