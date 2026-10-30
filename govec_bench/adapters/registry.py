@@ -56,7 +56,7 @@ class Database(NamedTuple):
 _DATABASE_KEYS = {"engine", "env", "opt_in", "needs_dimensions"}
 
 
-def _env_value(value: object) -> str:
+def env_value(value: object) -> str:
     # YAML reads true, yes and on as booleans and 16 as a number; environment variables are
     # strings, and Go parses "true".
     if isinstance(value, bool):
@@ -93,7 +93,7 @@ def parse_databases(text: str) -> dict[str, Database]:
             service=engine_name,
             build_adapter=engine.build_adapter,
             disk_paths=engine.disk_paths,
-            env={key: _env_value(value) for key, value in entry.get("env", {}).items()},
+            env={key: env_value(value) for key, value in entry.get("env", {}).items()},
             needs_dimensions=entry.get("needs_dimensions", False),
             opt_in=entry.get("opt_in", False),
             build_grpc_adapter=engine.build_grpc_adapter,

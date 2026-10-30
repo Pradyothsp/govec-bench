@@ -203,6 +203,11 @@ Add `-- --db govec --db chroma` to run only some databases. The databases are li
 `databases.yaml`: GoVec's variants (int8, memory-mapped, brute force) are entries there, each a
 few settings over `govec-config.yaml`. `--set KEY=VALUE` changes a GoVec setting for one run.
 
+A comparison run over several rounds in one session (a GoVec release against a newer commit, say)
+is a file in `experiments/`, run with `task bench:run EXPERIMENT=<name>`: each round runs every
+arm through the pipeline, in an order that alternates between rounds, and the session's files go in
+`results/sessions/`.
+
 ## Run-to-run variation
 
 Latency on a laptop moves between runs by tens of percent, and whole nights shift together: in

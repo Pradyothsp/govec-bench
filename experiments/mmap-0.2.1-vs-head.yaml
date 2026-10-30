@@ -1,0 +1,14 @@
+description: >-
+  GoVec memory-mapped, the published 0.2.1 image against the GoVec repo's HEAD, in one session:
+  whether restarts and RAM changed in the code or only between nights.
+dataset: dbpedia
+size: large
+rounds: 4
+order: alternate
+arms:
+  - name: v0.2.1
+    database: govec-mmap
+    govec: ghcr.io/pradyothsp/govec:0.2.1
+  - name: head
+    database: govec-mmap
+    govec: HEAD

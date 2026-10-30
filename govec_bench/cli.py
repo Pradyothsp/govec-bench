@@ -3,6 +3,7 @@
 import [PATH ...]   index results files (default: results/, the published ones included);
                     folders are searched, so `import ../govec-notes/bench` adds older sessions
 runs                list indexed runs, newest first, with what each database ran as
+run EXPERIMENT      run an experiment's rounds (benchmarks/experiment.py); --dry-run shows the plan
 """
 
 import argparse
@@ -12,6 +13,7 @@ from collections.abc import Sequence
 from contextlib import closing
 from pathlib import Path
 
+from govec_bench.benchmarks.experiment import add_run_arguments, find_experiment, load_experiment, run_experiment
 from govec_bench.results import RESULTS_DB, RESULTS_DIR
 from govec_bench.store import connect, import_paths
 
@@ -59,6 +61,11 @@ def _runs(args: argparse.Namespace) -> None:
                 )
 
 
+def _run(args: argparse.Namespace) -> None:
+    experiment = load_experiment(find_experiment(args.experiment))
+    run_experiment(experiment, args.rounds, dry_run=args.dry_run)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="bench")
     parser.add_argument("--db", type=Path, default=RESULTS_DB, help=f"the results index (default: {RESULTS_DB})")
@@ -73,6 +80,10 @@ def build_parser() -> argparse.ArgumentParser:
     listing.add_argument("--database", help="only runs that include this database")
     listing.add_argument("--limit", type=int, default=20)
     listing.set_defaults(handler=_runs)
+
+    running = commands.add_parser("run", help="run an experiment's rounds")
+    add_run_arguments(running)
+    running.set_defaults(handler=_run)
 
     return parser
 

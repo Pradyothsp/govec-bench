@@ -65,12 +65,27 @@ def _build(commit: str, tag: str) -> None:
         _run(_docker(), "build", "--quiet", "--build-arg", f"VERSION={commit}", "--tag", tag, tmp)
 
 
+def commit_of(ref: str) -> str:
+    # Raises CalledProcessError when the GoVec repo has no such ref.
+    return _git("rev-parse", "--short=12", f"{ref}^{{commit}}")
+
+
+def describe_govec_ref(ref: str) -> str:
+    # What a ref would run, without building anything: for bench run --dry-run.
+    if is_image(ref):
+        return f"image {ref}" + ("" if _image_exists(ref) else " (not pulled yet)")
+
+    commit = commit_of(ref)
+    tag = built_tag(commit)
+    return f"{ref} = commit {commit}, " + (f"built as {tag}" if _image_exists(tag) else "to be built")
+
+
 @cache
 def resolve_govec_image(ref: str) -> GovecImage:
     if is_image(ref):
         return GovecImage(image=ref, commit=None)
 
-    commit = _git("rev-parse", "--short=12", f"{ref}^{{commit}}")
+    commit = commit_of(ref)
     tag = built_tag(commit)
 
     if _git("status", "--porcelain", "--untracked-files=no") and _git("rev-parse", "--short=12", "HEAD") == commit:

@@ -102,6 +102,12 @@ tasks:
       - bench-sweep
     cmd: uv run python -m govec_bench.benchmarks.ef_sweep --dataset {{.DATASET | default "sift"}} {{.CLI_ARGS}}
 
+  bench:run:
+    desc: Run an experiment's rounds (EXPERIMENT=a file in experiments/, or a path; -- --dry-run shows the plan)
+    aliases:
+      - bench-run
+    cmd: uv run python -m govec_bench.cli run {{.EXPERIMENT}} {{.CLI_ARGS}}
+
   results:import:
     desc: Index results files into results/bench.db (default results/; pass folders after --, e.g. -- ../govec-notes/bench)
     aliases:

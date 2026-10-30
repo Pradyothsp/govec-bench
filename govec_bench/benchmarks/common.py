@@ -7,13 +7,14 @@ import time
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, TypedDict
 
 from govec_bench.adapters.base import VectorDBAdapter
 from govec_bench.adapters.registry import DATABASES, Database, select_databases
 from govec_bench.benchmarks.images import GovecImage, resolve_govec_image
 from govec_bench.datasets.base import ArrayItems
 from govec_bench.datasets.registry import DATASETS, SIZES, DatasetSizes
+from govec_bench.results_file import StartedAs
 
 SETUP_BATCH_SIZE = 100
 
@@ -208,14 +209,20 @@ def wait_until_queryable(build_adapter: Callable[[], VectorDBAdapter], timeout_s
     raise TimeoutError(msg)
 
 
-def render_override(service: str, settings: dict[str, object]) -> str:
+class ServiceOverride(TypedDict, total=False):
+    # What a Compose override file changes on one service.
+    environment: dict[str, str]
+    image: str
+
+
+def render_override(service: str, settings: ServiceOverride) -> str:
     # JSON is valid YAML, so Compose reads this as an override file without a YAML dependency.
     return json.dumps({"services": {service: settings}}, indent=2)
 
 
 # What each database ran as, filled in by running_alone() from the started container, for the
 # results file: the image docker-compose.yml pins is only what was asked for.
-STARTED: dict[str, dict[str, object]] = {}
+STARTED: dict[str, StartedAs] = {}
 
 
 def _check_started(database: Database, environment: dict[str, str], govec_image: GovecImage | None) -> None:
@@ -245,7 +252,7 @@ def _check_started(database: Database, environment: dict[str, str], govec_image:
     }
 
 
-def setup_of(databases: dict[str, Database]) -> dict[str, object]:
+def setup_of(databases: dict[str, Database]) -> dict[str, StartedAs]:
     # For the results file: what each database that started ran as.
     return {name: STARTED[name] for name in databases if name in STARTED}
 
@@ -269,7 +276,7 @@ def running_alone(
 
     govec_image = resolve_govec_image(database.image_ref) if database.image_ref else None
 
-    settings: dict[str, object] = {}
+    settings: ServiceOverride = {}
     if environment:
         settings["environment"] = environment
     if govec_image is not None:

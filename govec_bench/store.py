@@ -6,7 +6,8 @@ files again, so deleting it loses nothing. A run is keyed by a hash of its file,
 imported from two places (results/ and a copy in govec-notes) is one run.
 
 Tables:
-  runs     one per results file: benchmark, dataset, when, where it was imported from, label
+  runs     one per results file: benchmark, dataset, when, where it was imported from, label,
+           and for a run bench run made, its experiment, session, round, arm and position
   entries  one per database in a run: what it ran as (image, GoVec commit, settings), and the
            error if it failed partway
   metrics  one per number a database recorded, under a dotted name: queries.k_10.latency.mean_ms
@@ -20,6 +21,8 @@ from contextlib import closing
 from pathlib import Path
 from typing import NamedTuple
 
+from govec_bench.results_file import ResultsFile
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
     id TEXT PRIMARY KEY,
@@ -27,7 +30,12 @@ CREATE TABLE IF NOT EXISTS runs (
     dataset TEXT,
     timestamp TEXT,
     source TEXT NOT NULL,
-    label TEXT NOT NULL
+    label TEXT NOT NULL,
+    experiment TEXT,
+    session TEXT,
+    round INTEGER,
+    arm TEXT,
+    position INTEGER
 );
 CREATE TABLE IF NOT EXISTS entries (
     run_id TEXT NOT NULL REFERENCES runs(id),
@@ -49,6 +57,9 @@ CREATE TABLE IF NOT EXISTS metrics (
 );
 CREATE INDEX IF NOT EXISTS metrics_by_name ON metrics (metric, database);
 """
+
+# Columns added to runs after its first version, so an index built before them still opens.
+_ADDED_RUN_COLUMNS = {"experiment": "TEXT", "session": "TEXT", "round": "INTEGER", "arm": "TEXT", "position": "INTEGER"}
 
 
 class Imported(NamedTuple):
@@ -122,6 +133,12 @@ def connect(path: Path) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(path)
     db.executescript(SCHEMA)
+
+    present = {row[1] for row in db.execute("PRAGMA table_info(runs)")}
+    for column, kind in _ADDED_RUN_COLUMNS.items():
+        if column not in present:
+            db.execute(f"ALTER TABLE runs ADD COLUMN {column} {kind}")
+
     return db
 
 
@@ -131,31 +148,53 @@ def import_file(db: sqlite3.Connection, path: Path) -> Imported:
     if db.execute("SELECT 1 FROM runs WHERE id = ?", (run_id,)).fetchone():
         return Imported(path, run_id, new=False)
 
-    payload = json.loads(content)
+    payload: ResultsFile = json.loads(content)
     setup = payload.get("setup") or {}
+    experiment = payload.get("experiment")
+    tag = (
+        (experiment["name"], experiment["session"], experiment["round"], experiment["arm"], experiment["position"])
+        if experiment
+        else (None,) * 5
+    )
 
     with db:
         db.execute(
-            "INSERT INTO runs (id, benchmark, dataset, timestamp, source, label) VALUES (?, ?, ?, ?, ?, ?)",
-            (run_id, payload["benchmark"], payload.get("dataset"), payload.get("timestamp"), str(path), path.stem),
+            "INSERT INTO runs (id, benchmark, dataset, timestamp, source, label, experiment, session, round, arm, position) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                run_id,
+                payload["benchmark"],
+                payload.get("dataset"),
+                payload.get("timestamp"),
+                str(path),
+                path.stem,
+                *tag,
+            ),
         )
 
         for database, result in payload["results"].items():
             # The ef sweep writes series under labels (govec@efc200); each names its database.
             service = result.get("service") if isinstance(result, dict) else None
-            ran_as = setup.get(database) or setup.get(service) or {}
+            ran_as = setup.get(database) or (setup.get(service) if isinstance(service, str) else None)
             error = result.get("error") if isinstance(result, dict) else None
+            image = (
+                (
+                    ran_as["service"],
+                    ran_as["image"],
+                    ran_as["image_id"],
+                    ran_as["govec_commit"],
+                    json.dumps(ran_as["env"]),
+                )
+                if ran_as
+                else (None,) * 5
+            )
             db.execute(
                 "INSERT INTO entries (run_id, database, service, image, image_id, govec_commit, env, error) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     run_id,
                     database,
-                    ran_as.get("service"),
-                    ran_as.get("image"),
-                    ran_as.get("image_id"),
-                    ran_as.get("govec_commit"),
-                    json.dumps(ran_as["env"]) if "env" in ran_as else None,
+                    *image,
                     error,
                 ),
             )

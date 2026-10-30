@@ -1,0 +1,14 @@
+description: >-
+  GoVec on the heap store, the published 0.2.1 image against the GoVec repo's HEAD, in one
+  session: what the allocation work changed end to end.
+dataset: dbpedia
+size: large
+rounds: 4
+order: alternate
+arms:
+  - name: v0.2.1
+    database: govec
+    govec: ghcr.io/pradyothsp/govec:0.2.1
+  - name: head
+    database: govec
+    govec: HEAD

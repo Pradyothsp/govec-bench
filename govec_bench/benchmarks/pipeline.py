@@ -51,7 +51,7 @@ from govec_bench.benchmarks.memory import (
 )
 from govec_bench.datasets.base import ArrayItems
 from govec_bench.datasets.groundtruth import exact_cosine_neighbors
-from govec_bench.datasets.registry import Size, load_sized
+from govec_bench.datasets.registry import DatasetSizes, Size, load_sized
 from govec_bench.results import LatencyStats, RecallStats, compute_latency_stats, compute_recall_stats, write_results
 from govec_bench.types import NeighborIndices, Vector
 
@@ -364,18 +364,39 @@ def result_to_json(result: Record, run_position: int, error: str | None = None) 
     return payload
 
 
-def main() -> None:
-    args = parse_pipeline_args()
-    if args.size == "large":
-        require_free_disk()
-    dataset = load_sized(args.bench.dataset, args.size)
+def build_workload(sizes: DatasetSizes, size: Size) -> tuple[str, Workload]:
+    # The dataset's name, and what every database is loaded and graded with. Built once and
+    # shared: the exact neighbours of 100k vectors take a while to compute.
+    dataset = load_sized(sizes, size)
     workload = Workload(
         base=dataset.base,
         queries=dataset.queries,
         groundtruth=exact_cosine_neighbors(dataset.base.vectors, dataset.queries, max(K_VALUES)),
-        single_insert_items=args.bench.dataset.small().base,
-        dimensions=args.bench.dataset.dimensions,
+        single_insert_items=sizes.small().base,
+        dimensions=sizes.dimensions,
     )
+    return dataset.name, workload
+
+
+def measure_database(database: Database, workload: Workload, run_position: int) -> dict[str, object]:
+    # Every stage for one database. A failure partway is recorded with what came before it, so
+    # one database failing doesn't discard the others' results.
+    run = Run(database=database, workload=workload)
+    error = None
+    try:
+        run_pipeline(run, PIPELINE)
+    except Exception as exc:  # noqa: BLE001 -- recorded in the results instead
+        traceback.print_exc()
+        error = f"{type(exc).__name__}: {exc}"
+
+    return result_to_json(run.record, run_position, error)
+
+
+def main() -> None:
+    args = parse_pipeline_args()
+    if args.size == "large":
+        require_free_disk()
+    dataset_name, workload = build_workload(args.bench.dataset, args.size)
 
     databases = args.bench.databases
     order = shuffled(list(databases))
@@ -384,19 +405,11 @@ def main() -> None:
     results: dict[str, object] = {}
     for position, name in enumerate(order):
         print(f"{name}:")
-        run = Run(database=databases[name], workload=workload)
-        error = None
-        try:
-            run_pipeline(run, PIPELINE)
-        except Exception as exc:  # noqa: BLE001 -- one database failing shouldn't discard the others' results
-            traceback.print_exc()
-            error = f"{type(exc).__name__}: {exc}"
-
-        results[name] = result_to_json(run.record, position, error)
+        results[name] = measure_database(databases[name], workload, position)
 
     # Registry order in the file, whatever order they ran in, so every results file lists databases alike.
     results = {name: results[name] for name in databases}
-    path = write_results(benchmark="pipeline", dataset=dataset.name, results=results, setup=setup_of(databases))
+    path = write_results(benchmark="pipeline", dataset=dataset_name, results=results, setup=setup_of(databases))
     print(f"Wrote {path}")
 
 

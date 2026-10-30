@@ -134,7 +134,15 @@ def test_import_file__sweep_series_under_a_label__finds_its_database_setup(tmp_p
         {
             "benchmark": "ef_sweep",
             "dataset": "sift10k",
-            "setup": {"govec": {"service": "govec", "image": "ghcr.io/pradyothsp/govec:0.2.1", "env": {}}},
+            "setup": {
+                "govec": {
+                    "service": "govec",
+                    "image": "ghcr.io/pradyothsp/govec:0.2.1",
+                    "image_id": "sha256:3e7f",
+                    "govec_commit": None,
+                    "env": {},
+                }
+            },
             "results": {"govec@efc200": {"service": "govec", "ef_construction": 200, "points": []}},
         },
     )

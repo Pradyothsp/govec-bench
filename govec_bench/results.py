@@ -2,10 +2,12 @@ import json
 import sqlite3
 import statistics
 import warnings
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from govec_bench.results_file import ResultsFile, RunTag, StartedAs
 from govec_bench.store import import_paths
 
 RESULTS_DIR = Path("results")
@@ -45,21 +47,31 @@ def compute_recall_stats(recalls: list[float]) -> RecallStats:
 
 
 def write_results(
-    benchmark: str, dataset: str, results: dict[str, object], setup: dict[str, object] | None = None
+    benchmark: str,
+    dataset: str,
+    results: dict[str, object],
+    setup: Mapping[str, StartedAs] | None = None,
+    *,
+    experiment: RunTag | None = None,
+    directory: Path = RESULTS_DIR,
+    name: str | None = None,
 ) -> Path:
     # setup: what each database ran as (image, GoVec commit, settings), from common.setup_of().
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    # experiment: which experiment, session, round and arm this run was, when bench run made it.
+    directory.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now(UTC)
-    payload = {
+    payload: ResultsFile = {
         "benchmark": benchmark,
         "timestamp": timestamp.isoformat(),
         "dataset": dataset,
-        "setup": setup or {},
+        "setup": dict(setup or {}),
         "results": results,
     }
+    if experiment is not None:
+        payload["experiment"] = experiment
 
-    path = RESULTS_DIR / f"{benchmark}_{timestamp.strftime('%Y%m%dT%H%M%SZ')}.json"
+    path = directory / f"{name or benchmark + '_' + timestamp.strftime('%Y%m%dT%H%M%SZ')}.json"
     path.write_text(json.dumps(payload, indent=2))
 
     # The file is the record; failing to index it loses nothing, `task results:import` retries.

@@ -6,6 +6,7 @@ from govec_bench.adapters.registry import DATABASES, select_databases
 from govec_bench.benchmarks.common import (
     MIN_FREE_DISK_BYTES,
     FreeSpace,
+    ServiceOverride,
     parse_args,
     parse_df_available,
     render_override,
@@ -137,7 +138,7 @@ def test_parse_args__govec_without_a_govec_database__refuses() -> None:
 
 def test_render_override__environment_and_image__set_on_that_service_only() -> None:
     # Arrange
-    settings: dict[str, object] = {"environment": {"GOVEC_ENABLE_MMAP": "true"}, "image": "govec-bench/govec:abc"}
+    settings: ServiceOverride = {"environment": {"GOVEC_ENABLE_MMAP": "true"}, "image": "govec-bench/govec:abc"}
 
     # Act
     override = json.loads(render_override("govec", settings))
