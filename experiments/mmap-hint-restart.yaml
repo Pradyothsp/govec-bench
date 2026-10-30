@@ -1,0 +1,17 @@
+description: >-
+  Restarts with data only, GoVec memory-mapped on main against main without the random-access
+  hint (govec branch bench/no-madv-random): the 10-30 session found main at 546 ms and the
+  unhinted arm split between 462 and ~540, over too few runs to say whether the hint costs the
+  load. Empty restarts ride along as a control the hint shouldn't touch.
+dataset: dbpedia
+size: large
+rounds: 8
+order: alternate
+steps: [restart-loaded, restart-empty]
+arms:
+  - name: main
+    database: govec-mmap
+    govec: main
+  - name: no-hint
+    database: govec-mmap
+    govec: bench/no-madv-random
