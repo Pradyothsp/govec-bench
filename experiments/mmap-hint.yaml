@@ -1,0 +1,15 @@
+description: >-
+  GoVec memory-mapped on main, with and without the random-access hint on its mmap store (govec
+  branch bench/no-madv-random reverts it): whether the hint is behind slower restarts with data
+  and the lower RAM docker stats charges.
+dataset: dbpedia
+size: large
+rounds: 4
+order: alternate
+arms:
+  - name: main
+    database: govec-mmap
+    govec: main
+  - name: no-hint
+    database: govec-mmap
+    govec: bench/no-madv-random
