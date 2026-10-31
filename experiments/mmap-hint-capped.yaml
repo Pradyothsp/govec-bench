@@ -1,0 +1,19 @@
+description: >-
+  The mmap random-access hint where it's meant to pay: GoVec memory-mapped on main against main
+  without it (govec branch bench/no-madv-random), each container capped at 450 MiB with no swap,
+  below the 632 MB vector store, so searches read evicted vectors back from disk. Uncapped, the
+  hint bought nothing and cost restarts with data 12%.
+dataset: dbpedia
+size: large
+rounds: 4
+order: alternate
+steps: [memory, queries, queries-grpc, restart-loaded]
+arms:
+  - name: main
+    database: govec-mmap
+    govec: main
+    memory: 450M
+  - name: no-hint
+    database: govec-mmap
+    govec: bench/no-madv-random
+    memory: 450M
