@@ -10,6 +10,7 @@ class StartedAs(TypedDict):
     image_id: str
     govec_commit: str | None  # None for an image used as it is
     env: dict[str, str]  # the database's own settings, by GOVEC_ variable
+    memory_limit_bytes: NotRequired[int]  # the container's; files from before it was recorded lack it
 
 
 class RunTag(TypedDict):

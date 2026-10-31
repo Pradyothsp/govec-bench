@@ -86,14 +86,20 @@ class SessionKey(NamedTuple):
     session: str
 
 
+class Setup(NamedTuple):
+    # What one run ran as; None where its file didn't record it.
+    image_id: str | None
+    env: str | None  # settings as JSON
+    memory_limit: int | None
+
+
 @dataclass(slots=True)
 class ArmData:
     name: str
     database: str
     runs: int = 0
     failed: int = 0
-    # (image ID, settings as JSON) of each run: one entry if every run ran the same thing.
-    setups: set[tuple[str | None, str | None]] = field(default_factory=set)
+    setups: set[Setup] = field(default_factory=set)  # one entry if every run ran the same thing
     values: dict[str, list[float]] = field(default_factory=dict)  # by metric name, one per run
 
 
@@ -166,7 +172,7 @@ def _collect(rows: Iterable[sqlite3.Row], key: str) -> dict[str, ArmData]:
         arm = arms.setdefault(row[key], ArmData(name=row[key], database=row["database"]))
         arm.runs += 1
         arm.failed += row["error"] is not None
-        arm.setups.add((row["image_id"], row["env"]))
+        arm.setups.add(Setup(row["image_id"], row["env"], row["memory_limit"]))
     return arms
 
 
@@ -186,7 +192,7 @@ def load_session(db: sqlite3.Connection, key: SessionKey) -> tuple[str, dict[str
     # The session's dataset, and its arms in the order they ran in round 1.
     db.row_factory = sqlite3.Row
     rows = db.execute(
-        "SELECT r.arm, r.dataset, e.database, e.image_id, e.env, e.error FROM runs r "
+        "SELECT r.arm, r.dataset, e.database, e.image_id, e.env, e.memory_limit, e.error FROM runs r "
         "JOIN entries e ON e.run_id = r.id WHERE r.experiment = ? AND r.session = ? ORDER BY r.round, r.position",
         key,
     ).fetchall()
@@ -204,7 +210,7 @@ def load_published(db: sqlite3.Connection, dataset: str) -> dict[str, ArmData]:
     db.row_factory = sqlite3.Row
     where = "WHERE r.benchmark = 'pipeline' AND r.dataset = ? AND r.source LIKE '%published%'"
     rows = db.execute(
-        "SELECT e.database, e.image_id, e.env, e.error FROM runs r "  # noqa: S608 -- fixed text
+        "SELECT e.database, e.image_id, e.env, e.memory_limit, e.error FROM runs r "  # noqa: S608 -- fixed text
         f"JOIN entries e ON e.run_id = r.id {where} ORDER BY r.timestamp",
         (dataset,),
     ).fetchall()
@@ -258,9 +264,11 @@ def select_metrics(arms: Iterable[ArmData], patterns: Sequence[str], *, every: b
 
 
 def same_setup(arm: ArmData, other: ArmData) -> bool:
-    # Only when it's known: files from before results recorded what ran have no image ID.
+    # Only when it's known: files from before results recorded what ran have no image ID or
+    # memory limit.
     (setup,) = arm.setups if len(arm.setups) == 1 else (None,)
-    return setup is not None and setup[0] is not None and arm.setups == other.setups
+    known = setup is not None and setup.image_id is not None and setup.memory_limit is not None
+    return known and arm.setups == other.setups
 
 
 def _summary_of(arm: ArmData | None, metric: Metric) -> Summary | None:
@@ -385,7 +393,9 @@ def arms_line(arms: dict[str, ArmData]) -> str:
     for arm in arms.values():
         failed = f", {arm.failed} failed partway" if arm.failed else ""
         varied = ", setup varied between runs" if len(arm.setups) > 1 else ""
-        parts.append(f"{arm.name} ({arm.database}, {arm.runs} runs{failed}{varied})")
+        limits = {setup.memory_limit for setup in arm.setups if setup.memory_limit is not None}
+        memory = f", {limits.pop() / 1024**2:g} MiB memory" if len(limits) == 1 else ""
+        parts.append(f"{arm.name} ({arm.database}{memory}, {arm.runs} runs{failed}{varied})")
     return "arms: " + "; ".join(parts)
 
 

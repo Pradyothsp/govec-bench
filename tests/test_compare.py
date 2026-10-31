@@ -6,10 +6,12 @@ from govec_bench.compare import (
     HEADLINE,
     ArmData,
     Better,
+    Setup,
     Summary,
     compare,
     metric_of,
     resolve_session,
+    same_setup,
     select_metrics,
     verdict,
 )
@@ -106,7 +108,7 @@ def test_compare__session__control_is_round_ones_first_arm_and_the_change_has_a_
 
     # Assert
     assert lines[0] == "ab/s1: dbpedia100k, control old"
-    assert lines[1] == "arms: old (govec-mmap, 3 runs); new (govec-mmap, 3 runs)"
+    assert lines[1] == "arms: old (govec-mmap, 2048 MiB memory, 3 runs); new (govec-mmap, 2048 MiB memory, 3 runs)"
     row = next(line for line in lines if line.startswith("Restart with data"))
     assert row.split()[-5:] == ["(551–553)", "+12.2%", "every", "run", "worse"]  # noqa: RUF001 -- a range
 
@@ -124,3 +126,25 @@ def test_compare__baseline_session__an_arm_with_the_same_setup_is_marked_as_drif
     assert "new (same image and settings: this change is the sessions, not the code)" in lines
     old_row = lines[lines.index("old (same image and settings: this change is the sessions, not the code)") + 2]
     assert "+10.0%" in old_row
+
+
+@pytest.mark.parametrize(
+    ("limit", "other_limit", "expected"),
+    [
+        (2 * 1024**3, 2 * 1024**3, True),
+        (2 * 1024**3, 450 * 1024**2, False),  # a capped arm against the same code uncapped
+        (None, None, False),  # files from before the limit was recorded: not known to match
+    ],
+)
+def test_same_setup__memory_limit__part_of_what_must_match(
+    *, limit: int | None, other_limit: int | None, expected: bool
+) -> None:
+    # Arrange
+    arm = ArmData("old", "govec-mmap", setups={Setup("sha256:3e7f", "{}", limit)})
+    other = ArmData("old", "govec-mmap", setups={Setup("sha256:3e7f", "{}", other_limit)})
+
+    # Act
+    same = same_setup(arm, other)
+
+    # Assert
+    assert same is expected

@@ -14,6 +14,7 @@ HEAD_SETUP: StartedAs = {
     "image_id": "sha256:4ee6",
     "govec_commit": "450295fd1adf",
     "env": {"GOVEC_ENABLE_MMAP": "true"},
+    "memory_limit_bytes": 2 * 1024**3,
 }
 OLD_SETUP: StartedAs = {
     **HEAD_SETUP,

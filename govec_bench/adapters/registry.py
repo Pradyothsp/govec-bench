@@ -51,6 +51,9 @@ class Database(NamedTuple):
     # What to run instead of the image docker-compose.yml pins: an image, or a git ref of the
     # GoVec repo to build (see benchmarks/images.py). None runs the pin.
     image_ref: str | None = None
+    # The container's memory limit instead of docker-compose.yml's, with no swap beyond it, so
+    # data larger than the limit has to be read back from disk. None keeps the file's.
+    memory_bytes: int | None = None
 
 
 _DATABASE_KEYS = {"engine", "env", "opt_in", "needs_dimensions"}

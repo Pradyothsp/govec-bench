@@ -18,6 +18,7 @@ arm per round, session.json (the plan, what ran, the machine and commits) and ru
         database: govec-mmap    # a database in databases.yaml, opt-in ones included
         govec: ghcr.io/pradyothsp/govec:0.2.1   # GoVec only: an image or a git ref (--govec)
         set: {hnsw_m: 32}       # GoVec only: settings, as for --set
+        memory: 450M            # optional: the container's memory limit, no swap (K, M, G: binary)
 
 It replaces the shell scripts a night of runs used to need: it starts Docker, builds every image
 and the workload before the first round, keeps the Mac awake, and waits for Docker to give disk
@@ -83,7 +84,9 @@ DOCKER_START_S = 5 * 60
 DOCKER_SETTLE_S = 30  # the VM is still busy for a while after `docker info` first answers
 
 _EXPERIMENT_KEYS = {"description", "dataset", "size", "rounds", "order", "steps", "arms"}
-_ARM_KEYS = {"name", "database", "govec", "set"}
+_ARM_KEYS = {"name", "database", "govec", "set", "memory"}
+
+_MEMORY_UNITS = {"K": 1024, "M": 1024**2, "G": 1024**3}
 
 
 class Arm(NamedTuple):
@@ -103,6 +106,21 @@ class Experiment(NamedTuple):
 
     def pipeline(self) -> list[Stage]:
         return select_steps(PIPELINE, self.steps) if self.steps else list(PIPELINE)
+
+
+def parse_memory(name: str, value: object) -> int:
+    # Docker's units: 450M is 450 MiB.
+    text = str(value).strip().upper().removesuffix("B")
+    unit = _MEMORY_UNITS.get(text[-1:], 1)
+    number = text[:-1] if text[-1:] in _MEMORY_UNITS else text
+    try:
+        size = round(float(number) * unit)
+    except ValueError:
+        size = 0
+    if size <= 0:
+        msg = f"{name}: memory should be a size like 450M or 2G, got {value!r}"
+        raise ValueError(msg)
+    return size
 
 
 def _arm(index: int, entry: object) -> Arm:
@@ -133,7 +151,15 @@ def _arm(index: int, entry: object) -> Arm:
         raise TypeError(msg)
 
     env = {**database.env, **{f"GOVEC_{key.upper()}": env_value(value) for key, value in settings.items()}}
-    return Arm(name, database._replace(env=env, image_ref=str(image_ref) if image_ref else None))
+    memory = entry.get("memory")
+    return Arm(
+        name,
+        database._replace(
+            env=env,
+            image_ref=str(image_ref) if image_ref else None,
+            memory_bytes=parse_memory(name, memory) if memory is not None else None,
+        ),
+    )
 
 
 def parse_experiment(name: str, text: str) -> Experiment:
@@ -371,6 +397,7 @@ class ArmSetup:
     database: str
     govec: str | None  # the image or git ref it runs; None for the pin
     env: dict[str, str]
+    memory_bytes: int | None = None  # its memory limit; None for docker-compose.yml's
 
 
 RunStatus = Literal["done", "failed", "skipped"]
@@ -425,7 +452,9 @@ class Session:
             dataset=experiment.dataset,
             size=experiment.size,
             arms={
-                arm.name: ArmSetup(arm.database.name, arm.database.image_ref, arm.database.env)
+                arm.name: ArmSetup(
+                    arm.database.name, arm.database.image_ref, arm.database.env, arm.database.memory_bytes
+                )
                 for arm in experiment.arms
             },
             steps=steps_of(experiment.pipeline()),
@@ -526,7 +555,8 @@ def describe(experiment: Experiment, rounds: list[list[str]]) -> None:
         database = arm.database
         image = describe_govec_ref(database.image_ref) if database.image_ref else "the image docker-compose.yml pins"
         settings = " ".join(f"{key.removeprefix('GOVEC_').lower()}={value}" for key, value in database.env.items())
-        print(f"  {arm.name}: {database.name} on {image}{', ' + settings if settings else ''}")
+        memory = f", memory {database.memory_bytes / 1024**2:g} MiB, no swap" if database.memory_bytes else ""
+        print(f"  {arm.name}: {database.name} on {image}{', ' + settings if settings else ''}{memory}")
     for number, order in enumerate(rounds, start=1):
         print(f"  round {number}: {', '.join(order)}")
 

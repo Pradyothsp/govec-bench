@@ -209,10 +209,38 @@ def wait_until_queryable(build_adapter: Callable[[], VectorDBAdapter], timeout_s
     raise TimeoutError(msg)
 
 
+class Limits(TypedDict):
+    memory: str  # Compose takes sizes as strings only; a bare number is bytes
+
+
+class Resources(TypedDict):
+    limits: Limits
+
+
+class Deploy(TypedDict):
+    resources: Resources
+
+
 class ServiceOverride(TypedDict, total=False):
     # What a Compose override file changes on one service.
     environment: dict[str, str]
     image: str
+    deploy: Deploy
+    memswap_limit: str
+
+
+def override_of(database: Database, environment: dict[str, str], govec_image: GovecImage | None) -> ServiceOverride:
+    settings: ServiceOverride = {}
+    if environment:
+        settings["environment"] = environment
+    if govec_image is not None:
+        settings["image"] = govec_image.image
+    if database.memory_bytes is not None:
+        # Swap capped at the limit too, or Docker allows as much swap again and the cap moves
+        # pages to swap instead of making them be read back.
+        settings["deploy"] = {"resources": {"limits": {"memory": str(database.memory_bytes)}}}
+        settings["memswap_limit"] = str(database.memory_bytes)
+    return settings
 
 
 def render_override(service: str, settings: ServiceOverride) -> str:
@@ -241,6 +269,11 @@ def _check_started(database: Database, environment: dict[str, str], govec_image:
         msg = f"{database.name} started on {image}, not {govec_image.image}"
         raise RuntimeError(msg)
 
+    memory_limit = inspected["HostConfig"]["Memory"]
+    if database.memory_bytes is not None and memory_limit != database.memory_bytes:
+        msg = f"{database.name} started with a {memory_limit}-byte memory limit, not {database.memory_bytes}"
+        raise RuntimeError(msg)
+
     # The database's own settings, not what one start varies (the ef sweep's ef): a benchmark
     # that varies a setting records it with each measurement.
     STARTED[database.name] = {
@@ -249,6 +282,7 @@ def _check_started(database: Database, environment: dict[str, str], govec_image:
         "image_id": inspected["Image"],
         "govec_commit": govec_image.commit if govec_image else None,
         "env": database.env,
+        "memory_limit_bytes": memory_limit,
     }
 
 
@@ -276,11 +310,7 @@ def running_alone(
 
     govec_image = resolve_govec_image(database.image_ref) if database.image_ref else None
 
-    settings: ServiceOverride = {}
-    if environment:
-        settings["environment"] = environment
-    if govec_image is not None:
-        settings["image"] = govec_image.image
+    settings = override_of(database, environment, govec_image)
 
     with tempfile.TemporaryDirectory() as tmp:
         files = []

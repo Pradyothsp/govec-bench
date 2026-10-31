@@ -8,7 +8,7 @@ imported from two places (results/ and a copy in govec-notes) is one run.
 Tables:
   runs     one per results file: benchmark, dataset, when, where it was imported from, label,
            and for a run bench run made, its experiment, session, round, arm and position
-  entries  one per database in a run: what it ran as (image, GoVec commit, settings), and the
+  entries  one per database in a run: what it ran as (image, GoVec commit, settings, memory limit), and the
            error if it failed partway
   metrics  one per number a database recorded, under a dotted name: queries.k_10.latency.mean_ms
 """
@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS entries (
     govec_commit TEXT,
     env TEXT,
     error TEXT,
+    memory_limit INTEGER,
     PRIMARY KEY (run_id, database)
 );
 CREATE TABLE IF NOT EXISTS metrics (
@@ -60,6 +61,7 @@ CREATE INDEX IF NOT EXISTS metrics_by_name ON metrics (metric, database);
 
 # Columns added to runs after its first version, so an index built before them still opens.
 _ADDED_RUN_COLUMNS = {"experiment": "TEXT", "session": "TEXT", "round": "INTEGER", "arm": "TEXT", "position": "INTEGER"}
+_ADDED_ENTRY_COLUMNS = {"memory_limit": "INTEGER"}
 
 
 class Imported(NamedTuple):
@@ -134,10 +136,11 @@ def connect(path: Path) -> sqlite3.Connection:
     db = sqlite3.connect(path)
     db.executescript(SCHEMA)
 
-    present = {row[1] for row in db.execute("PRAGMA table_info(runs)")}
-    for column, kind in _ADDED_RUN_COLUMNS.items():
-        if column not in present:
-            db.execute(f"ALTER TABLE runs ADD COLUMN {column} {kind}")
+    for table, added in (("runs", _ADDED_RUN_COLUMNS), ("entries", _ADDED_ENTRY_COLUMNS)):
+        present = {row[1] for row in db.execute(f"PRAGMA table_info({table})")}
+        for column, kind in added.items():
+            if column not in present:
+                db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {kind}")
 
     return db
 
@@ -184,13 +187,14 @@ def import_file(db: sqlite3.Connection, path: Path) -> Imported:
                     ran_as["image_id"],
                     ran_as["govec_commit"],
                     json.dumps(ran_as["env"]),
+                    ran_as.get("memory_limit_bytes"),
                 )
                 if ran_as
-                else (None,) * 5
+                else (None,) * 6
             )
             db.execute(
-                "INSERT INTO entries (run_id, database, service, image, image_id, govec_commit, env, error) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO entries (run_id, database, service, image, image_id, govec_commit, env, memory_limit, error) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     run_id,
                     database,

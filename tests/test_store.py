@@ -24,6 +24,7 @@ def _pipeline_file(path: Path) -> Path:
                     "image_id": "sha256:4ee6",
                     "govec_commit": "450295fd1adf",
                     "env": {"GOVEC_ENABLE_MMAP": "true"},
+                    "memory_limit_bytes": 471859200,
                 }
             },
             "results": {
@@ -90,7 +91,7 @@ def test_import_file__pipeline__records_the_run_what_each_database_ran_as_and_it
         imported = import_file(db, path)
         run = db.execute("SELECT benchmark, dataset, label FROM runs WHERE id = ?", (imported.run_id,)).fetchone()
         entries = db.execute(
-            "SELECT database, govec_commit, env, error FROM entries WHERE run_id = ? ORDER BY database",
+            "SELECT database, govec_commit, env, memory_limit, error FROM entries WHERE run_id = ? ORDER BY database",
             (imported.run_id,),
         ).fetchall()
         value = db.execute(
@@ -101,8 +102,8 @@ def test_import_file__pipeline__records_the_run_what_each_database_ran_as_and_it
     assert imported.new
     assert run == ("pipeline", "dbpedia100k", "pipeline_1")
     assert entries == [
-        ("govec-mmap", "450295fd1adf", '{"GOVEC_ENABLE_MMAP": "true"}', None),
-        ("qdrant", None, None, "ReadTimeout: timed out"),
+        ("govec-mmap", "450295fd1adf", '{"GOVEC_ENABLE_MMAP": "true"}', 471859200, None),
+        ("qdrant", None, None, None, "ReadTimeout: timed out"),
     ]
     assert value == (6.2,)
 

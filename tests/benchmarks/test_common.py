@@ -7,6 +7,7 @@ from govec_bench.benchmarks.common import (
     MIN_FREE_DISK_BYTES,
     FreeSpace,
     ServiceOverride,
+    override_of,
     parse_args,
     parse_df_available,
     render_override,
@@ -147,6 +148,32 @@ def test_render_override__environment_and_image__set_on_that_service_only() -> N
     assert override == {
         "services": {"govec": {"environment": {"GOVEC_ENABLE_MMAP": "true"}, "image": "govec-bench/govec:abc"}}
     }
+
+
+def test_override_of__memory_limit__compose_limit_and_no_swap_beyond_it() -> None:
+    # Arrange
+    database = DATABASES["govec-mmap"]._replace(memory_bytes=450 * 1024**2)
+
+    # Act
+    settings = override_of(database, {"GOVEC_ENABLE_MMAP": "true"}, None)
+
+    # Assert
+    assert settings == {
+        "environment": {"GOVEC_ENABLE_MMAP": "true"},
+        "deploy": {"resources": {"limits": {"memory": "471859200"}}},
+        "memswap_limit": "471859200",
+    }
+
+
+def test_override_of__no_limit__leaves_docker_compose_ymls() -> None:
+    # Arrange
+    database = DATABASES["govec"]
+
+    # Act
+    settings = override_of(database, {}, None)
+
+    # Assert
+    assert settings == {}
 
 
 def test_running_alone__needs_dimensions_without_them__refuses_before_starting_anything() -> None:

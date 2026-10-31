@@ -32,6 +32,7 @@ arms:
     database: govec-mmap
     govec: HEAD
     set: {hnsw_m: 32, enable_wal: false}
+    memory: 450M
 """
 
 
@@ -55,6 +56,7 @@ def test_parse_experiment__arms__database_with_the_arms_image_and_settings() -> 
     assert new.database.image_ref == "HEAD"
     assert new.database.env == {"GOVEC_ENABLE_MMAP": "true", "GOVEC_HNSW_M": "32", "GOVEC_ENABLE_WAL": "false"}
     assert new.database.name == "govec-mmap"
+    assert (old.database.memory_bytes, new.database.memory_bytes) == (None, 450 * 1024**2)
 
 
 @pytest.mark.parametrize(
@@ -69,6 +71,8 @@ def test_parse_experiment__arms__database_with_the_arms_image_and_settings() -> 
         ("arms: [{name: a, database: govec}]\nsteps: [restarts]", "no step restarts"),
         ("arms: [{name: a, database: govec}]\nsteps: restart-loaded", "should be a list"),
         ("dataset: sift", "needs a list of arms"),
+        ("arms: [{name: a, database: govec, memory: lots}]", "a size like 450M"),
+        ("arms: [{name: a, database: govec, memory: 0}]", "a size like 450M"),
     ],
 )
 def test_parse_experiment__invalid__says_what_is_wrong(text: str, message: str) -> None:
