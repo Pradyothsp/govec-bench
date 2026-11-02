@@ -8,7 +8,6 @@ metric's runs one by one.
 """
 
 import sqlite3
-from datetime import UTC, datetime
 from typing import ClassVar, override
 
 from rich.text import Text
@@ -42,7 +41,7 @@ from govec_bench.compare import (
     session_rows,
     with_baseline,
 )
-from govec_bench.tui.tables import dot_plot, fill_rows, line_plot
+from govec_bench.tui.tables import dot_plot, fill_rows, line_plot, plural, started_text
 from govec_bench.tui.theme import palette
 
 NO_BASELINE = "none"
@@ -52,19 +51,10 @@ def session_id(key: SessionKey) -> str:
     return f"{key.experiment}/{key.session}"
 
 
-def started_text(session: str) -> str:
-    # A session's stamp (20261031T013303Z, UTC) as local time: Oct 30 21:33.
-    try:
-        started = datetime.strptime(session, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC).astimezone()
-    except ValueError:
-        return session
-    return f"{started:%b} {started.day} {started:%H:%M}"
-
-
 def session_option(info: SessionInfo) -> Text:
     colors, text = palette(), Text(info.key.experiment, style="bold")
     text.append(f"\n{started_text(info.key.session)}  ·  {info.dataset}", style=colors.muted)
-    text.append(f"\n{info.runs} runs", style=colors.muted)
+    text.append(f"\n{plural(info.runs, 'run')}", style=colors.muted)
     if info.failed:
         text.append(f", {info.failed} failed", style=colors.bad)
     return text
@@ -79,7 +69,7 @@ def arms_text(arms: dict[str, ArmData]) -> Text:
         text.append(f" {arm.name} ", style=f"bold {colors.background} on {colors.arm(names, arm.name)}")
         limits = {setup.memory_limit for setup in arm.setups if setup.memory_limit is not None}
         memory = f", {limits.pop() / 1024**2:g} MiB" if len(limits) == 1 else ""
-        text.append(f" {arm.database}{memory}, {arm.runs} runs", style="dim")
+        text.append(f" {arm.database}{memory}, {plural(arm.runs, 'run')}", style="dim")
         if arm.failed:
             text.append(f", {arm.failed} failed", style=colors.bad)
         if len(arm.setups) > 1:
@@ -88,24 +78,48 @@ def arms_text(arms: dict[str, ArmData]) -> Text:
 
 
 class RunsScreen(ModalScreen[None]):
-    # One metric's runs in a session, one row each.
+    # One metric's runs in a session, one row each, over the browse view.
     BINDINGS: ClassVar[list[BindingType]] = [Binding("escape,q,enter", "dismiss", "Back")]
 
-    def __init__(self, db: sqlite3.Connection, key: SessionKey, metric: Metric) -> None:
+    DEFAULT_CSS = """
+    RunsScreen { align: center middle; }
+    #runs-card {
+        width: 90;
+        height: auto;
+        max-height: 80%;
+        border: round $accent;
+        border-title-style: bold;
+        border-subtitle-color: $text-muted;
+        background: $surface;
+        padding: 0 1;
+    }
+    #runs { height: auto; max-height: 100%; }
+    """
+
+    def __init__(self, db: sqlite3.Connection, key: SessionKey, metric: Metric, arms: list[str]) -> None:
         super().__init__()
-        self.db, self.key, self.metric = db, key, metric
+        self.db, self.key, self.metric, self.arms = db, key, metric, arms
 
     @override
     def compose(self) -> ComposeResult:
-        yield Static(f"{self.metric.label.strip()} in {self.key.experiment}/{self.key.session}", id="runs-title")
-        yield DataTable(id="runs", cursor_type="row")
-        yield Footer()
+        with Vertical(id="runs-card"):
+            yield DataTable(id="runs", cursor_type="row")
 
     def on_mount(self) -> None:
-        table = self.query_one(DataTable)
-        table.add_columns("round", "arm", "position", "value", "file")
+        card = self.query_one("#runs-card")
+        card.border_title = self.metric.label.strip()
+        card.border_subtitle = f"{self.key.experiment}  ·  {started_text(self.key.session)}  ·  esc to go back"
+
+        colors, table = palette(), self.query_one(DataTable)
+        table.add_columns("round", "arm", "ran", Text("value", justify="right"), "results file")
         for run in run_values(self.db, self.key, self.metric.name):
-            table.add_row(run.round, run.arm, run.position, formatted(run.value, self.metric.unit), run.label)
+            table.add_row(
+                run.round,
+                Text(run.arm, style=f"bold {colors.arm(self.arms, run.arm)}"),
+                "first" if run.position == 0 else "then",
+                Text(formatted(run.value, self.metric.unit), style="bold", justify="right"),
+                Text(run.label, style="dim"),
+            )
 
 
 class BrowseScreen(Screen[None]):
@@ -290,7 +304,7 @@ class BrowseScreen(Screen[None]):
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         metric = self.highlighted_metric()
         if event.data_table.id == "rows" and metric is not None and self.key is not None:
-            self.app.push_screen(RunsScreen(self.db, self.key, metric))
+            self.app.push_screen(RunsScreen(self.db, self.key, metric, list(self.arms)))
 
     def action_toggle_history(self) -> None:
         self.show_history = not self.show_history

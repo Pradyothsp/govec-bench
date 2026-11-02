@@ -1,6 +1,7 @@
 """What the live and browse views share: a comparison's rows in a DataTable, and dot plots."""
 
 from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
 
 from rich.text import Text
 from textual.widgets import DataTable
@@ -23,6 +24,19 @@ def _verdict_style(verdict: str) -> str:
         if word in verdict:
             return style
     return ""
+
+
+def started_text(session: str) -> str:
+    # A session's stamp (20261031T013303Z, UTC) as local time: Oct 30 21:33.
+    try:
+        started = datetime.strptime(session, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC).astimezone()
+    except ValueError:
+        return session
+    return f"{started:%b} {started.day} {started:%H:%M}"
+
+
+def plural(count: int, noun: str) -> str:
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
 def change_cell(item: Change | None) -> Text:
@@ -98,6 +112,6 @@ def line_plot(plot: PlotextPlot, metric: Metric, series: dict[str, tuple[list[st
     for arm, (names, medians) in series.items():
         color = rgb(palette().arm(list(series), arm))
         plt.plot([position[name] for name in names], _scaled(medians, metric), marker="●", color=color, label=arm)
-    plt.xticks(list(position.values()), [session[:8] for session in sessions])
+    plt.xticks(list(position.values()), [started_text(session) for session in sessions])
     _themed(plot)
     plot.refresh()
