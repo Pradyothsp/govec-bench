@@ -5,12 +5,20 @@ import sqlite3
 from pathlib import Path
 
 import pytest
-from textual.widgets import DataTable, Static
+from textual.widgets import DataTable, RichLog, Static
 
 from govec_bench.events import Event, EventLog
 from govec_bench.tui import live
 from govec_bench.tui.app import BenchApp
-from govec_bench.tui.live import LiveScreen, LiveState, duration_text, fold, last_segments, time_left
+from govec_bench.tui.live import (
+    ContainerStats,
+    LiveScreen,
+    LiveState,
+    duration_text,
+    fold,
+    parse_docker_stats,
+    time_left,
+)
 
 
 def _events() -> list[Event]:
@@ -55,15 +63,17 @@ def test_time_left__one_run_finished__mean_run_times_the_rest_less_the_current_o
     assert left == 300 * 3 - 150
 
 
-def test_last_segments__progress_bar_redraws__keeps_what_the_terminal_would_show() -> None:
+def test_parse_docker_stats__json_lines__name_cpu_memory_and_disk() -> None:
     # Arrange
-    text = "batch insert...\nbatch:  10%\rbatch:  50%\rbatch: 100%\n  -> done\npartial"
+    output = (
+        '{"Name":"govec-bench-govec","CPUPerc":"155.07%","MemUsage":"257.7MiB / 450MiB","BlockIO":"399GB / 840MB"}\n'
+    )
 
     # Act
-    lines = last_segments(text)
+    stats = parse_docker_stats(output)
 
     # Assert
-    assert lines == ["batch insert...", "batch: 100%", "  -> done", "partial"]
+    assert stats == [ContainerStats("govec-bench-govec", "155.07%", "257.7MiB / 450MiB", "399GB / 840MB")]
 
 
 def test_duration_text__seconds_minutes_hours() -> None:
@@ -88,26 +98,36 @@ def test_live_screen__session_folder__shows_where_it_is_and_the_plan(
     log = EventLog(directory)
     for event in _events():
         log.emit(event)
-    (directory / "run.log").write_text("round 1 of 2\n  old:\n")
+    (directory / "run.log").write_text(
+        "round 1 of 2\n  old:\n    batch insert...\n"
+        "batch inserts:  64%|######4   | 640/1000 [03:09<18:30,  3.08s/batch]\n"
+    )
 
-    async def drive() -> tuple[str, list[str], int]:
+    async def drive() -> tuple[str, str, list[str], int, str, int]:
         app = BenchApp(db, live=directory)
         async with app.run_test(size=(160, 50)) as pilot:
             await pilot.pause()
             screen = app.screen
             assert isinstance(screen, LiveScreen)
-            status = str(screen.query_one("#status", Static).render())
+            now = str(screen.query_one("#now", Static).render())
+            session = str(screen.query_one("#session", Static).render())
             plan = screen.query_one("#plan", DataTable)
             cells = [str(cell) for cell in plan.get_row_at(0)]
             results = screen.query_one("#results", DataTable).row_count
-        return status, cells, results
+            progress = str(screen.query_one("#progress-text", Static).render())
+            logged = len(screen.query_one("#log", RichLog).lines)
+        return now, session, cells, results, progress, logged
 
     # Act
-    status, cells, results = asyncio.run(drive())
+    now, session, cells, results, progress, logged = asyncio.run(drive())
 
     # Assert
-    assert "round 1 of 2 · new · loaded index · recall and query latency" in status
-    assert "1 of 4 runs done" in status
-    assert "last warning: the Mac's disk has 30 GB free" in status
+    assert "Round 1 of 2" in now
+    assert " new " in now
+    assert "loaded index → recall and query latency" in now
+    assert "⚠ the Mac's disk has 30 GB free" in now
+    assert "1 of 4 runs" in session
     assert cells == ["1", "old ✓", "new ▶"]
     assert results == 1  # session s1's restart metric, read from the index
+    assert progress == "640 of 1,000  ·  03:09 in  ·  18:30 left  ·  3.08 s/batch"
+    assert logged == 3  # the bar shows as a bar, not in the log

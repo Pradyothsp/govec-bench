@@ -32,7 +32,7 @@ def test_browse_screen__newest_session__its_comparison_and_drill_down_to_runs(db
     title, row, runs = asyncio.run(drive())
 
     # Assert
-    assert title.startswith("ab/s2: dbpedia100k, control old")
+    assert title.startswith("dbpedia100k  ·  control old")
     assert row[0] == "Restart with data, p50 (ms)"
     assert row[-1] == "+2.0%  every run worse"  # new, 552 ms, against old slowed to 541
     assert runs == 6

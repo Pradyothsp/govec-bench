@@ -10,6 +10,7 @@ from textual.app import App
 from govec_bench.compare import SessionKey
 from govec_bench.tui.browse import BrowseScreen
 from govec_bench.tui.live import LiveScreen
+from govec_bench.tui.theme import palette
 
 
 class BenchApp(App[None]):
@@ -28,6 +29,7 @@ class BenchApp(App[None]):
         self.db, self.live, self.session, self.baseline, self.process = db, live, session, baseline, process
 
     def on_mount(self) -> None:
+        self.theme = palette().textual
         if self.live is not None:
             self.push_screen(LiveScreen(self.db, self.live, baseline=self.baseline, process=self.process))
         else:

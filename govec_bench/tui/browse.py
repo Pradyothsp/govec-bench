@@ -8,8 +8,10 @@ metric's runs one by one.
 """
 
 import sqlite3
+from datetime import UTC, datetime
 from typing import ClassVar, override
 
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical
@@ -25,8 +27,8 @@ from govec_bench.compare import (
     Baseline,
     Metric,
     Row,
+    SessionInfo,
     SessionKey,
-    arms_line,
     baseline_column,
     baseline_matches,
     formatted,
@@ -41,12 +43,48 @@ from govec_bench.compare import (
     with_baseline,
 )
 from govec_bench.tui.tables import dot_plot, fill_rows, line_plot
+from govec_bench.tui.theme import palette
 
 NO_BASELINE = "none"
 
 
 def session_id(key: SessionKey) -> str:
     return f"{key.experiment}/{key.session}"
+
+
+def started_text(session: str) -> str:
+    # A session's stamp (20261031T013303Z, UTC) as local time: Oct 30 21:33.
+    try:
+        started = datetime.strptime(session, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC).astimezone()
+    except ValueError:
+        return session
+    return f"{started:%b} {started.day} {started:%H:%M}"
+
+
+def session_option(info: SessionInfo) -> Text:
+    colors, text = palette(), Text(info.key.experiment, style="bold")
+    text.append(f"\n{started_text(info.key.session)}  ·  {info.dataset}", style=colors.muted)
+    text.append(f"\n{info.runs} runs", style=colors.muted)
+    if info.failed:
+        text.append(f", {info.failed} failed", style=colors.bad)
+    return text
+
+
+def arms_text(arms: dict[str, ArmData]) -> Text:
+    # Each arm as a chip in its colour, with its database, memory limit and runs.
+    names, text, colors = list(arms), Text(), palette()
+    for arm in arms.values():
+        if text:
+            text.append("   ")
+        text.append(f" {arm.name} ", style=f"bold {colors.background} on {colors.arm(names, arm.name)}")
+        limits = {setup.memory_limit for setup in arm.setups if setup.memory_limit is not None}
+        memory = f", {limits.pop() / 1024**2:g} MiB" if len(limits) == 1 else ""
+        text.append(f" {arm.database}{memory}, {arm.runs} runs", style="dim")
+        if arm.failed:
+            text.append(f", {arm.failed} failed", style=colors.bad)
+        if len(arm.setups) > 1:
+            text.append(", setup varied", style=colors.caution)
+    return text
 
 
 class RunsScreen(ModalScreen[None]):
@@ -78,9 +116,19 @@ class BrowseScreen(Screen[None]):
     ]
 
     DEFAULT_CSS = """
-    #sessions { width: 42; }
+    BrowseScreen .card {
+        border: round $panel-lighten-2;
+        border-title-color: $text-muted;
+        border-title-style: bold;
+    }
+    BrowseScreen .card:focus-within { border: round $accent; }
+    #sessions { width: 46; padding: 0 1; }
+    #sessions > .option-list--option-highlighted { background: $boost; text-style: none; }
+    #sessions:focus > .option-list--option-highlighted { background: $accent 30%; }
     #title { height: auto; padding: 0 1; }
-    #baseline { width: 60; }
+    #baseline-bar { height: 3; }
+    #baseline-label { width: auto; padding: 1 1 0 1; color: $text-muted; }
+    #baseline { width: 56; }
     #rows { height: 1fr; }
     #plot { height: 1fr; }
     """
@@ -105,19 +153,20 @@ class BrowseScreen(Screen[None]):
         with Horizontal():
             yield OptionList(
                 *(
-                    Option(
-                        f"{info.key.experiment}/{info.key.session}\n  {info.dataset}, {info.runs} runs",
-                        id=session_id(info.key),
-                    )
-                    for info in self.sessions
+                    item
+                    for index, info in enumerate(self.sessions)
+                    for item in ([None] if index else []) + [Option(session_option(info), id=session_id(info.key))]
                 ),
                 id="sessions",
+                classes="card",
             )
             with Vertical():
-                yield Static(id="title")
-                yield Select(self._baseline_options(), allow_blank=False, value=self.baseline_name, id="baseline")
-                yield DataTable(id="rows", cursor_type="row")
-                yield PlotextPlot(id="plot")
+                yield Static(id="title", classes="card")
+                with Horizontal(id="baseline-bar"):
+                    yield Static("Compare against", id="baseline-label")
+                    yield Select(self._baseline_options(), allow_blank=False, value=self.baseline_name, id="baseline")
+                yield DataTable(id="rows", cursor_type="row", classes="card")
+                yield PlotextPlot(id="plot", classes="card")
         yield Footer()
 
     def _baseline_options(self) -> list[tuple[str, str]]:
@@ -125,6 +174,12 @@ class BrowseScreen(Screen[None]):
         return [("no baseline", NO_BASELINE), ("the published runs", PUBLISHED), *sessions]
 
     def on_mount(self) -> None:
+        self.sub_title = "browse"
+        self.query_one("#sessions").border_title = "Sessions"
+        self.query_one(
+            "#rows"
+        ).border_title = "Comparison: median (range) per arm; ↑↓ picks the plotted metric, enter its runs"
+        self.query_one("#plot").border_title = "Runs"
         if self.key is None:
             self.query_one("#title", Static).update(
                 "No experiment sessions in the index yet: run one with `task bench:run`, or `task results:import`."
@@ -150,16 +205,25 @@ class BrowseScreen(Screen[None]):
         control = next(iter(self.arms))
         rows = session_rows(self.arms, control, self.metrics)
         header = [*self.arms, *(f"{name} vs {control}" for name in self.arms if name != control)]
-        title = [f"{session_id(self.key)}: {dataset}, control {control}", arms_line(self.arms)]
+        title_card = self.query_one("#title", Static)
+        title_card.border_title = f"{self.key.experiment}  ·  {started_text(self.key.session)}"
+        title = [
+            Text.assemble(
+                (dataset, "bold"),
+                ("  ·  control ", "dim"),
+                (control, f"bold {palette().arm(list(self.arms), control)}"),
+            ),
+            arms_text(self.arms),
+        ]
 
         if self.baseline is not None:
             rows, header, notes = self._with_baseline(rows, header, self.baseline)
-            title.extend(notes)
+            title.extend(Text(note, style=palette().info) for note in notes)
         cautions = {row.metric.label.strip(): row.metric.caution for row in rows if row.metric.caution}
-        title.extend(f"! {label}: {caution}" for label, caution in cautions.items())
+        title.extend(Text(f"! {label}: {caution}", style=palette().caution) for label, caution in cautions.items())
 
-        self.query_one("#title", Static).update("\n".join(title))
-        fill_rows(self.query_one("#rows", DataTable), header, rows)
+        title_card.update(Text("\n").join(title))
+        fill_rows(self.query_one("#rows", DataTable), header, rows, arms=list(self.arms))
         self.show_plot()
 
     def _with_baseline(
@@ -186,6 +250,9 @@ class BrowseScreen(Screen[None]):
         if metric is None or self.key is None:
             return
         plot = self.query_one(PlotextPlot)
+        plot.border_title = (
+            f"{metric.label.strip()}: {'median per session' if self.show_history else 'one dot per run'}"
+        )
 
         if self.show_history:
             series: dict[str, tuple[list[str], list[float]]] = {}

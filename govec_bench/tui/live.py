@@ -3,9 +3,13 @@
 It reads the session's folder, not the runner: events.jsonl for the round, arm and step,
 session.json for the plan, run.log for the output, and bench.db for each run's numbers as they
 land. So it can attach to a session already running (`bench ui` finds it), and quitting it
-leaves the run going.
-`bench ui` opens it on the newest session still running, without being told which. Docker's container stats are read every 10 s, a light call next to what
-the benchmark itself does.
+leaves the run going. `bench ui` opens it on the newest session still running, without being
+told which. Docker's container stats are read every 10 s, a light call next to what the benchmark
+itself does.
+
+Top, three cards: where the session is, how far through it is, and the machine. Under them, the
+step's progress bar. Middle, the plan (every round's arms and how each ended) and the results so
+far, one row per metric. Bottom, run.log in colour, without the progress bars.
 """
 
 import json
@@ -18,13 +22,14 @@ import subprocess
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import ClassVar, override
+from typing import ClassVar, NamedTuple, override
 
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import DataTable, Footer, Header, Log, Static
+from textual.widgets import DataTable, Footer, Header, ProgressBar, RichLog, Static
 
 from govec_bench.benchmarks.common import DOCKER, DOCKER_DESKTOP_DISK_DIR
 from govec_bench.benchmarks.experiment import runner_alive
@@ -41,13 +46,32 @@ from govec_bench.compare import (
 )
 from govec_bench.events import EVENTS_FILE, Event, read_events
 from govec_bench.tui.browse import BrowseScreen
+from govec_bench.tui.runlog import Progress, last_segments, parse_progress, styled_line
 from govec_bench.tui.tables import fill_rows
+from govec_bench.tui.theme import palette
 
 POLL_S = 1.0
 DOCKER_STATS_S = 10.0
 STOP_CONFIRM_S = 5.0
 
-_MARKS = {"done": "✓", "failed": "✗", "skipped": "-"}
+
+def _mark(status: str) -> tuple[str, str]:
+    # How a run in the plan ended, or that it's running or still to come: its mark and style.
+    colors = palette()
+    marks = {
+        "done": ("✓", f"bold {colors.good}"),
+        "failed": ("✗", f"bold {colors.bad}"),
+        "skipped": ("-", "dim"),
+        "running": ("▶", f"bold {colors.caution}"),
+    }
+    return marks.get(status, ("·", "dim"))
+
+
+class ContainerStats(NamedTuple):
+    name: str
+    cpu: str
+    memory: str
+    block_io: str  # read / written since the container started
 
 
 @dataclass(slots=True)
@@ -107,9 +131,19 @@ def duration_text(seconds: float) -> str:
     return f"{minutes} m {secs:02d} s" if minutes else f"{secs} s"
 
 
-def last_segments(text: str) -> list[str]:
-    # run.log's lines, each as a terminal would leave it: a progress bar redraws itself with \r.
-    return [line.rsplit("\r", 1)[-1] for line in text.split("\n")]
+def parse_docker_stats(output: str) -> list[ContainerStats]:
+    stats = []
+    for line in output.splitlines():
+        try:
+            item = json.loads(line)
+        except ValueError:
+            continue
+        stats.append(ContainerStats(item["Name"], item["CPUPerc"], item["MemUsage"], item["BlockIO"]))
+    return stats
+
+
+def _row(label: str, value: str | Text, style: str = "") -> Text:
+    return Text.assemble((f"{label:<10}", "dim"), value if isinstance(value, Text) else Text(value, style=style))
 
 
 class LiveScreen(Screen[None]):
@@ -120,10 +154,25 @@ class LiveScreen(Screen[None]):
     ]
 
     DEFAULT_CSS = """
-    #status { height: auto; padding: 0 1; }
-    #plan { width: 40; height: 1fr; }
+    LiveScreen .card {
+        border: round $panel-lighten-2;
+        border-title-color: $text-muted;
+        border-title-style: bold;
+        padding: 0 1;
+    }
+    #cards { height: 6; }
+    #cards .card { width: 1fr; height: 100%; }
+    #progress { height: 4; }
+    #progress ProgressBar { width: 100%; }
+    #progress Bar { width: 1fr; }
+    #progress-text { color: $text-muted; }
+    #middle { height: 2fr; }
+    #plan { width: 34; }
+    #results-box { width: 1fr; }
     #results { height: 1fr; }
-    #log { height: 12; }
+    #results-empty { color: $text-muted; padding: 1 2; }
+    #log { height: 1fr; min-height: 6; }
+    LiveScreen .warning-card { border: round $warning; }
     """
 
     def __init__(
@@ -140,24 +189,45 @@ class LiveScreen(Screen[None]):
         self.state = LiveState()
         self.event_offset = self.log_offset = 0
         self.log_partial = ""
+        self.progress: Progress | None = None
         self.plan: list[list[str]] = []
         self.pid: int | None = None
-        self.containers = ""
+        self.containers: list[ContainerStats] | None = None
         self.stop_asked: float | None = None
 
     @override
     def compose(self) -> ComposeResult:
-        yield Header()
-        yield Static(id="status")
-        with Horizontal():
-            yield DataTable(id="plan", cursor_type="none")
-            with Vertical():
+        yield Header(show_clock=True)
+        with Horizontal(id="cards"):
+            yield Static(id="now", classes="card")
+            yield Static(id="session", classes="card")
+            yield Static(id="machine", classes="card")
+        with Vertical(id="progress", classes="card"):
+            yield ProgressBar(show_eta=False)
+            yield Static(id="progress-text")
+        with Horizontal(id="middle"):
+            yield DataTable(id="plan", cursor_type="none", classes="card")
+            with Vertical(id="results-box", classes="card"):
                 yield DataTable(id="results", cursor_type="row")
-        yield Log(id="log", max_lines=2000)
+                yield Static("Numbers land here as each run finishes.", id="results-empty")
+        yield RichLog(id="log", max_lines=2000, wrap=True, classes="card")
         yield Footer()
 
     def on_mount(self) -> None:
-        self.title = f"{self.key.experiment}/{self.key.session}"
+        self.title = self.key.experiment
+        self.sub_title = f"session {self.key.session}, live"
+        titles = {
+            "#now": "Now",
+            "#session": "Session",
+            "#machine": "Machine",
+            "#progress": "Progress",
+            "#plan": "Plan",
+            "#results-box": "Results so far: median (range) per arm, and each against the control",
+            "#log": "Log",
+        }
+        for selector, title in titles.items():
+            self.query_one(selector).border_title = title
+        self.query_one("#results", DataTable).display = False
         self.poll()
         self.set_interval(POLL_S, self.poll)
         if DOCKER:
@@ -199,8 +269,21 @@ class LiveScreen(Screen[None]):
         self.log_offset += len(data)
         lines = last_segments(self.log_partial + data.decode(errors="replace"))
         self.log_partial = lines.pop()  # no newline yet: may still grow
-        if lines:
-            self.query_one(Log).write_lines(lines)
+        log, arms = self.query_one(RichLog), self.arms()
+        for line in lines:
+            progress = parse_progress(line)
+            if progress is not None:
+                self.progress = progress
+            elif line.strip():
+                # A line after a bar means its step moved on; the bar shows until the next one.
+                if self.progress is not None and self.progress.done < self.progress.total:
+                    self.progress = None
+                log.write(styled_line(line, arms))
+        # On a terminal the bar redraws in place, so the newest one is the line still growing.
+        progress = parse_progress(self.log_partial)
+        if progress is not None:
+            self.progress = progress
+        self.show_progress()
 
     def read_docker_stats(self) -> None:
         self.run_worker(self._docker_stats, thread=True, exclusive=True, group="docker-stats")
@@ -209,17 +292,17 @@ class LiveScreen(Screen[None]):
         if DOCKER is None:
             return
         result = subprocess.run(  # noqa: S603 -- fixed args
-            [DOCKER, "stats", "--no-stream", "--format", "{{.Name}} CPU {{.CPUPerc}}, memory {{.MemUsage}}"],
+            [DOCKER, "stats", "--no-stream", "--format", "{{json .}}"],
             check=False,
             capture_output=True,
             text=True,
             timeout=30,
         )
-        text = "; ".join(result.stdout.split("\n")[:-1]) if result.returncode == 0 else "docker stats failed"
-        self.app.call_from_thread(self._set_containers, text or "no containers running")
+        stats = parse_docker_stats(result.stdout) if result.returncode == 0 else None
+        self.app.call_from_thread(self._set_containers, stats)
 
-    def _set_containers(self, text: str) -> None:
-        self.containers = text
+    def _set_containers(self, stats: list[ContainerStats] | None) -> None:
+        self.containers = stats
         self.show_status()
 
     # --- What's shown -------------------------------------------------------------------
@@ -237,56 +320,101 @@ class LiveScreen(Screen[None]):
             return ""
         return lines[-1] if lines else ""
 
+    def arms(self) -> list[str]:
+        # The arms in the order round 1 runs them: what colours them everywhere.
+        return list(self.plan[0]) if self.plan else []
+
     def show_status(self) -> None:
         state, now = self.state, time.time()
         total = sum(len(order) for order in self.plan)
-        lines = []
+        self._show_now(state, now)
 
-        if state.ended:
-            lines.append(f"session {state.ended}: {len(state.statuses)} of {total} runs")
-        elif not self.runner_alive() and (state.first is not None or self.process is not None):
-            lines.append(f"the runner stopped before the session ended: {self._runner_error() or 'see run.log'}")
-        else:
-            where = f"round {state.round or '-'} of {len(self.plan)}"
-            if state.arm:
-                where += f" · {state.arm}"
-            if state.stage:
-                where += f" · {state.stage}"
-            if state.step:
-                elapsed = f" ({duration_text(now - state.step_started)})" if state.step_started else ""
-                where += f" · {state.step}{elapsed}"
-            lines.append(where)
-
-        timing = [f"{len(state.statuses)} of {total} runs done"]
+        done = len(state.statuses)
+        failed = sum(status == "failed" for status in state.statuses.values())
+        width = 30
+        filled = round(width * done / total) if total else 0
+        runs = Text.assemble((f"{done} of {total} runs", "bold"))
+        if failed:
+            runs.append(f"  ·  {failed} failed", style=f"bold {palette().bad}")
+        session = [runs, Text.assemble(("━" * filled, palette().good), ("━" * (width - filled), palette().track))]
         if state.first is not None:
-            timing.append(f"{duration_text(now - state.first)} in")
+            session.append(_row("elapsed", duration_text(now - state.first)))
         left = time_left(state, total, now)
         if left is not None:
-            timing.append(f"about {duration_text(left)} left")
-        lines.append(" · ".join(timing))
+            session.append(_row("left", f"about {duration_text(left)}"))
+        self.query_one("#session", Static).update(Text("\n").join(session))
 
         disk = DOCKER_DESKTOP_DISK_DIR if DOCKER_DESKTOP_DISK_DIR.exists() else Path("/")
-        resources = [f"Mac disk {shutil.disk_usage(disk).free / 1000**3:.0f} GB free"]
-        if self.containers:
-            resources.append(self.containers)
-        lines.append(" · ".join(resources))
-        if state.warnings:
-            lines.append(f"last warning: {state.warnings[-1]}")
+        machine = [_row("Mac disk", f"{shutil.disk_usage(disk).free / 1000**3:.0f} GB free")]
+        if DOCKER is None:
+            machine.append(_row("docker", "not found", "dim"))
+        elif self.containers is None:
+            machine.append(_row("docker", "reading stats…", "dim"))
+        elif not self.containers:
+            machine.append(_row("docker", "no container running", "dim"))
+        for container in self.containers or []:
+            name = container.name.removeprefix("govec-bench-")
+            machine.append(_row(name, f"CPU {container.cpu}  ·  memory {container.memory}"))
+            machine.append(_row("", f"disk read / written {container.block_io}", "dim"))
+        self.query_one("#machine", Static).update(Text("\n").join(machine))
 
-        self.query_one("#status", Static).update("\n".join(lines))
+    def _show_now(self, state: LiveState, now: float) -> None:
+        card, colors = self.query_one("#now", Static), palette()
+        lines: list[Text] = []
+        if state.ended:
+            style = f"bold {colors.good}" if state.ended == "done" else f"bold {colors.caution}"
+            lines.append(Text(f"Session {state.ended}", style=style))
+        elif not self.runner_alive() and (state.first is not None or self.process is not None):
+            lines.append(Text("The runner stopped before the session ended", style=f"bold {colors.bad}"))
+            lines.append(Text(self._runner_error() or "see the log", style=colors.bad))
+        else:
+            where = Text.assemble(("Round ", "bold"), (f"{state.round or '-'} of {len(self.plan)}", "bold"))
+            if state.arm:
+                where.append("   ")
+                where.append(
+                    f" {state.arm} ", style=f"bold {colors.background} on {colors.arm(self.arms(), state.arm)}"
+                )
+            lines.append(where)
+            if state.stage or state.step:
+                lines.append(_row("step", " → ".join(part for part in (state.stage, state.step) if part)))
+            if state.step and state.step_started:
+                lines.append(_row("for", duration_text(now - state.step_started)))
+        if state.warnings:
+            lines.append(Text(f"⚠ {state.warnings[-1]}", style=colors.caution, overflow="ellipsis", no_wrap=True))
+        card.set_class(bool(state.warnings), "warning-card")
+        card.update(Text("\n").join(lines))
+
+    def show_progress(self) -> None:
+        box = self.query_one("#progress", Vertical)
+        bar, text = self.query_one(ProgressBar), self.query_one("#progress-text", Static)
+        progress = self.progress
+        if progress is None:
+            box.border_title = "Progress"
+            bar.update(total=None, progress=0)
+            text.update("this step has no progress bar")
+            return
+        box.border_title = progress.desc
+        bar.update(total=progress.total, progress=progress.done)
+        left = "" if progress.left == "?" else f"  ·  {progress.left} left"
+        rate = f"  ·  {progress.rate}" if progress.rate else ""
+        text.update(f"{progress.done:,} of {progress.total:,}  ·  {progress.elapsed} in{left}{rate}")
 
     def show_plan(self) -> None:
         table = self.query_one("#plan", DataTable)
         width = max((len(order) for order in self.plan), default=0)
+        arms = self.arms()
         table.clear(columns=True)
-        table.add_columns("round", *(f"{position + 1}" for position in range(width)))
+        table.add_columns("round", *(("first", "then")[min(position, 1)] for position in range(width)))
         for number, order in enumerate(self.plan, start=1):
             cells = []
             for arm in order:
                 status = self.state.statuses.get((number, arm))
                 running = self.state.round == number and self.state.arm == arm
-                cells.append(f"{arm} {_MARKS.get(status or '', '▶' if running else '·')}")
-            table.add_row(number, *cells)
+                mark, style = _mark(status or ("running" if running else "waiting"))
+                cell = Text(arm, style=palette().arm(arms, arm) if status or running else "dim")
+                cell.append(f" {mark}", style=style)
+                cells.append(cell)
+            table.add_row(Text(str(number), style="bold" if self.state.round == number else "dim"), *cells)
 
     def show_results(self) -> None:
         try:
@@ -307,7 +435,10 @@ class LiveScreen(Screen[None]):
                 if match.same_setup:
                     self.notify(f"{match.arm}: {SAME_SETUP_NOTE}", timeout=10)
 
-        fill_rows(self.query_one("#results", DataTable), header, rows)
+        table = self.query_one("#results", DataTable)
+        fill_rows(table, header, rows, arms=self.arms())
+        table.display = bool(rows)
+        self.query_one("#results-empty").display = not rows
 
     # --- Keys ---------------------------------------------------------------------------
 
