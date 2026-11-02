@@ -1,8 +1,9 @@
-"""The terminal app's colours, by what they mean, so a theme is one entry in THEMES.
+"""The colours of bench's terminal output, by what they mean, so a theme is one entry in THEMES.
 
-Textual styles its own widgets (borders, tables, the footer) from a Textual theme; the rest is
-coloured here: the log, the cards, verdicts, plan marks and plots. A palette names the Textual
-theme it was picked to sit on. use() switches the palette; screens read palette() as they draw.
+The terminal app (tui/) and the reports bench compare and bench runs print both colour from
+here: the log, the cards, verdicts, plan marks, plots and report tables. Textual styles its own
+widgets (borders, tables, the footer) from a Textual theme; a palette names the one it was
+picked to sit on. use() switches the palette; everything reads palette() as it draws.
 """
 
 from collections.abc import Sequence
@@ -29,6 +30,20 @@ class Palette:
     def arm(self, arms: Sequence[str], name: str) -> str:
         # The same arm the same colour in every chip, column, plot and log line.
         return self.arms[list(arms).index(name) % len(self.arms)] if name in arms else self.text
+
+    def verdict(self, verdict: str) -> str:
+        # A comparison's verdict ("every run better", "overlaps") by what it says.
+        for word, style in (
+            ("better", self.good),
+            ("worse", self.bad),
+            ("higher", self.caution),
+            ("lower", self.caution),
+            ("level", "dim"),
+            ("overlaps", "dim"),
+        ):
+            if word in verdict:
+                return style
+        return ""
 
 
 def rgb(color: str) -> tuple[int, int, int]:

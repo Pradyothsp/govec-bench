@@ -45,10 +45,10 @@ from govec_bench.compare import (
     with_baseline,
 )
 from govec_bench.events import EVENTS_FILE, Event, read_events
+from govec_bench.theme import palette
 from govec_bench.tui.browse import BrowseScreen
 from govec_bench.tui.runlog import Progress, last_segments, parse_progress, styled_line
 from govec_bench.tui.tables import fill_rows
-from govec_bench.tui.theme import palette
 
 POLL_S = 1.0
 DOCKER_STATS_S = 10.0

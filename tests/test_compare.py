@@ -6,8 +6,10 @@ from govec_bench.compare import (
     HEADLINE,
     ArmData,
     Better,
+    Change,
     Setup,
     Summary,
+    change_text,
     compare,
     metric_of,
     resolve_session,
@@ -15,6 +17,7 @@ from govec_bench.compare import (
     select_metrics,
     verdict,
 )
+from govec_bench.theme import palette
 
 
 @pytest.mark.parametrize(
@@ -104,7 +107,7 @@ def test_compare__session__control_is_round_ones_first_arm_and_the_change_has_a_
     session = "ab/s1"
 
     # Act
-    lines = compare(db, session, patterns=["cold_start_loaded.p50_ms"])
+    lines = [line.plain for line in compare(db, session, patterns=["cold_start_loaded.p50_ms"])]
 
     # Assert
     assert lines[0] == "ab/s1: dbpedia100k, control old"
@@ -118,7 +121,7 @@ def test_compare__baseline_session__an_arm_with_the_same_setup_is_marked_as_drif
     session, baseline = "ab/s2", "ab/s1"
 
     # Act
-    lines = compare(db, session, baseline=baseline, patterns=["cold_start_loaded.p50_ms"])
+    lines = [line.plain for line in compare(db, session, baseline=baseline, patterns=["cold_start_loaded.p50_ms"])]
 
     # Assert
     assert "Against ab/s1:" in lines
@@ -148,3 +151,19 @@ def test_same_setup__memory_limit__part_of_what_must_match(
 
     # Assert
     assert same is expected
+
+
+@pytest.mark.parametrize(
+    ("width", "expected"),
+    [(7, "  -1.9%  every run better"), (0, "-1.9%  every run better")],
+)
+def test_change_text__width__padded_for_text_tables_and_coloured_by_verdict(width: int, expected: str) -> None:
+    # Arrange
+    item = Change(-0.019, "every run better")
+
+    # Act
+    text = change_text(item, width=width)
+
+    # Assert
+    assert text.plain == expected
+    assert text.style == palette().good

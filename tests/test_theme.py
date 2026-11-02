@@ -1,6 +1,6 @@
 import pytest
 
-from govec_bench.tui.theme import DEFAULT_THEME, THEMES, palette, rgb, use
+from govec_bench.theme import DEFAULT_THEME, THEMES, palette, rgb, use
 
 
 def test_palette_arm__arms_past_the_palette__colours_wrap_and_unknown_is_text() -> None:

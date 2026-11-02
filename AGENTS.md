@@ -70,6 +70,8 @@ govec_bench/
   events.py            events.jsonl: what a running session is doing (round, arm, step, warnings)
   tui/                 the terminal app (Textual): browse.py over bench.db, live.py over a session's
                        folder (events, session.json, run.log), so it never talks to the runner
+  theme.py             the colours of the terminal app and of bench compare / runs, by role; a theme
+                       is a Palette in THEMES
   store.py             results/bench.db: every results file as rows (runs, what each database ran as,
                        one row per metric under a dotted name); an index over the JSON, rebuildable
   cli.py               the bench commands (python -m govec_bench.cli): import, runs, run, compare, ui

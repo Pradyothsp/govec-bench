@@ -41,8 +41,8 @@ from govec_bench.compare import (
     session_rows,
     with_baseline,
 )
+from govec_bench.theme import palette
 from govec_bench.tui.tables import dot_plot, fill_rows, line_plot, plural, started_text
-from govec_bench.tui.theme import palette
 
 NO_BASELINE = "none"
 

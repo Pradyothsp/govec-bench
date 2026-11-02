@@ -8,9 +8,9 @@ from pathlib import Path
 from textual.app import App
 
 from govec_bench.compare import SessionKey
+from govec_bench.theme import palette
 from govec_bench.tui.browse import BrowseScreen
 from govec_bench.tui.live import LiveScreen
-from govec_bench.tui.theme import palette
 
 
 class BenchApp(App[None]):

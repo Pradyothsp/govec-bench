@@ -11,7 +11,7 @@ from typing import NamedTuple
 
 from rich.text import Text
 
-from govec_bench.tui.theme import palette
+from govec_bench.theme import palette
 
 # tqdm's default layout: "desc:  64%|######4   | 640/1000 [03:09<18:30,  3.08s/batch]"
 _PROGRESS = re.compile(

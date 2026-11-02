@@ -18,6 +18,10 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Literal, NamedTuple
 
+from rich.text import Text
+
+from govec_bench.theme import palette
+
 Unit = Literal["ms", "bytes", "recall", ""]
 
 # Which way is better; "neither" for a size that's neither good nor bad by itself (file cache).
@@ -368,11 +372,14 @@ def load_baseline(db: sqlite3.Connection, baseline: str, dataset: str) -> Baseli
 # --- Text --------------------------------------------------------------------------------
 
 
-def change_text(item: Change | None) -> str:
+def change_text(item: Change | None, *, width: int = 7) -> Text:
+    # width: the change right-aligned to it, so a text table's verdicts line up; a DataTable's
+    # columns line up by themselves.
     if item is None:
-        return ""
+        return Text("")
     moved = f"{item.moved:+.1%}" if item.moved is not None else ""
-    return f"{moved:>7}  {item.verdict}"
+    text = f"{moved:>{width}}  {item.verdict}" if width else f"{moved}  {item.verdict}".lstrip()
+    return Text(text, style=palette().verdict(item.verdict))
 
 
 def label_of(metric: Metric) -> str:
@@ -380,56 +387,100 @@ def label_of(metric: Metric) -> str:
     return metric.label + unit
 
 
-def _table(header: Sequence[str], rows: Sequence[Sequence[str]]) -> list[str]:
-    widths = [max(len(row[column]) for row in [header, *rows]) for column in range(len(header))]
-    return [
-        "  ".join(cell.ljust(width) for cell, width in zip(row, widths, strict=True)).rstrip()
-        for row in [header, *rows]
-    ]
+def label_text(metric: Metric) -> Text:
+    # A metric's name, a sub-row ("  k=50") dimmed, with ! where it needs a caution.
+    text = Text(label_of(metric), style="dim" if metric.label != metric.label.lstrip() else "")
+    if metric.caution:
+        text.append(" !", style=f"bold {palette().caution}")
+    return text
 
 
-def arms_line(arms: dict[str, ArmData]) -> str:
-    parts = []
-    for arm in arms.values():
+def column_text(name: str, arms: Sequence[str]) -> Text:
+    # An arm's column in its colour, and a change column ("new vs old") in its arm's.
+    arm = name.split(" vs ", 1)[0].removesuffix(" (baseline)")
+    return Text(name, style=f"bold {palette().arm(arms, arm)}" if arm in arms else "bold")
+
+
+def _table(header: Sequence[Text], rows: Sequence[Sequence[Text]]) -> list[Text]:
+    widths = [max(row[column].cell_len for row in [header, *rows]) for column in range(len(header))]
+    lines = []
+    for row in [header, *rows]:
+        line = Text("  ").join(cell + " " * (width - cell.cell_len) for cell, width in zip(row, widths, strict=True))
+        line.rstrip()
+        lines.append(line)
+    return lines
+
+
+def arms_line(arms: dict[str, ArmData]) -> Text:
+    names, line = list(arms), Text("arms: ")
+    for index, arm in enumerate(arms.values()):
+        if index:
+            line.append("; ")
+        line.append(arm.name, style=f"bold {palette().arm(names, arm.name)}")
         failed = f", {arm.failed} failed partway" if arm.failed else ""
         varied = ", setup varied between runs" if len(arm.setups) > 1 else ""
         limits = {setup.memory_limit for setup in arm.setups if setup.memory_limit is not None}
         memory = f", {limits.pop() / 1024**2:g} MiB memory" if len(limits) == 1 else ""
-        parts.append(f"{arm.name} ({arm.database}{memory}, {arm.runs} runs{failed}{varied})")
-    return "arms: " + "; ".join(parts)
+        line.append(f" ({arm.database}{memory}, {arm.runs} runs")
+        line.append(failed, style=palette().bad)
+        line.append(varied, style=palette().caution)
+        line.append(")")
+    return line
 
 
-def _text_rows(rows: Sequence[Row]) -> list[list[str]]:
+def _text_rows(rows: Sequence[Row]) -> list[list[Text]]:
     return [
         [
-            label_of(row.metric) + (" !" if row.metric.caution else ""),
-            *(summary_text(summary, row.metric.unit) for summary in row.summaries.values()),
+            label_text(row.metric),
+            *(Text(summary_text(summary, row.metric.unit)) for summary in row.summaries.values()),
             *(change_text(item) for item in row.changes.values()),
         ]
         for row in rows
     ]
 
 
-def session_report(arms: dict[str, ArmData], control: str, metrics: Sequence[Metric]) -> list[str]:
+def _cautions(rows: Sequence[Row]) -> list[Text]:
+    return [
+        Text(f"! {row.metric.label.strip()}: {row.metric.caution}", style=palette().caution)
+        for row in rows
+        if row.metric.caution
+    ]
+
+
+def session_report(arms: dict[str, ArmData], control: str, metrics: Sequence[Metric]) -> list[Text]:
     rows = session_rows(arms, control, metrics)
-    header = ["", *arms, *(f"{name} vs {control}" for name in arms if name != control)]
-    cautions = [f"! {row.metric.label.strip()}: {row.metric.caution}" for row in rows if row.metric.caution]
-    return [*_table(header, _text_rows(rows)), *cautions]
+    names = list(arms)
+    header = [
+        Text(""),
+        *(
+            column_text(name, names)
+            for name in [*names, *(f"{name} vs {control}" for name in names if name != control)]
+        ),
+    ]
+    return [*_table(header, _text_rows(rows)), *_cautions(rows)]
 
 
 SAME_SETUP_NOTE = "same image and settings: this change is the sessions, not the code"
 
 
-def baseline_report(arms: dict[str, ArmData], baseline: Baseline, metrics: Sequence[Metric]) -> list[str]:
-    lines = []
+def baseline_report(arms: dict[str, ArmData], baseline: Baseline, metrics: Sequence[Metric]) -> list[Text]:
+    lines: list[Text] = []
+    names = list(arms)
     for match in baseline_matches(arms, baseline.arms, by_database=baseline.by_database, metrics=metrics):
         if match.baseline is None:
-            lines.append(f"{match.arm}: nothing to compare in the baseline")
+            lines.append(Text(f"{match.arm}: nothing to compare in the baseline", style="dim"))
             continue
 
-        note = f" ({SAME_SETUP_NOTE})" if match.same_setup else ""
-        header = ["", f"baseline ({match.baseline.runs})", f"session ({arms[match.arm].runs})", ""]
-        lines.extend([f"{match.arm}{note}", *_table(header, _text_rows(match.rows)), ""])
+        title = Text(match.arm, style=f"bold {palette().arm(names, match.arm)}")
+        if match.same_setup:
+            title.append(f" ({SAME_SETUP_NOTE})", style=palette().info)
+        header = [
+            Text(""),
+            Text(f"baseline ({match.baseline.runs})", style="bold"),
+            Text(f"session ({arms[match.arm].runs})", style="bold"),
+            Text(""),
+        ]
+        lines.extend([title, *_table(header, _text_rows(match.rows)), Text("")])
     return lines
 
 
@@ -441,7 +492,7 @@ def compare(
     baseline: str | None = None,
     patterns: Sequence[str] = (),
     every: bool = False,
-) -> list[str]:
+) -> list[Text]:
     key = resolve_session(db, session)
     dataset, arms = load_session(db, key)
     control = control or next(iter(arms))
@@ -450,12 +501,17 @@ def compare(
         raise SystemExit(msg)
 
     metrics = select_metrics(arms.values(), patterns, every=every)
-    lines = [f"{key.experiment}/{key.session}: {dataset}, control {control}", arms_line(arms), ""]
+    title = Text.assemble(
+        (f"{key.experiment}/{key.session}", "bold"),
+        f": {dataset}, control ",
+        (control, f"bold {palette().arm(list(arms), control)}"),
+    )
+    lines = [title, arms_line(arms), Text("")]
     lines.extend(session_report(arms, control, metrics))
 
     if baseline:
         reference = load_baseline(db, baseline, dataset)
-        lines.extend(["", f"Against {reference.name}:", ""])
+        lines.extend([Text(""), Text(f"Against {reference.name}:", style="bold"), Text("")])
         lines.extend(baseline_report(arms, reference, metrics))
 
     return lines

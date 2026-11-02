@@ -18,6 +18,9 @@ from collections.abc import Sequence
 from contextlib import closing
 from pathlib import Path
 
+from rich.console import Console
+from rich.text import Text
+
 from govec_bench.benchmarks.experiment import (
     add_run_arguments,
     find_experiment,
@@ -30,6 +33,13 @@ from govec_bench.benchmarks.experiment import (
 from govec_bench.compare import PUBLISHED, SessionKey, compare, resolve_session
 from govec_bench.results import RESULTS_DB, RESULTS_DIR
 from govec_bench.store import connect, import_paths
+from govec_bench.theme import palette
+
+
+def _console() -> Console:
+    # Coloured on a terminal, plain when piped to a file or another command (or with NO_COLOR);
+    # soft wrap, so a table wider than the terminal isn't broken into lines.
+    return Console(highlight=False, soft_wrap=True)
 
 
 def _import(args: argparse.Namespace) -> None:
@@ -38,11 +48,13 @@ def _import(args: argparse.Namespace) -> None:
     print(f"{len(imported)} results files, {new} new, {len(imported) - new} already indexed, in {args.db}")
 
 
-def _ran_as(image: str | None, commit: str | None, env: str | None) -> str:
-    parts = [commit or (image or "image not recorded")]
+def _ran_as(image: str | None, commit: str | None, env: str | None) -> Text:
+    text = Text()
+    text.append(commit or (image or "image not recorded"), style=palette().info if commit else "")
     if env:
-        parts.extend(f"{key.removeprefix('GOVEC_').lower()}={value}" for key, value in json.loads(env).items())
-    return " ".join(parts)
+        settings = " ".join(f"{key.removeprefix('GOVEC_').lower()}={value}" for key, value in json.loads(env).items())
+        text.append(f" {settings}", style="dim")
+    return text
 
 
 def _runs(args: argparse.Namespace) -> None:
@@ -59,20 +71,26 @@ def _runs(args: argparse.Namespace) -> None:
     query += " ORDER BY timestamp DESC LIMIT ?"
     params.append(args.limit)
 
+    console, colors = _console(), palette()
     with closing(connect(args.db)) as db:
         db.row_factory = sqlite3.Row
         for run in db.execute(query, params).fetchall():
-            print(
-                f"{run['id']}  {(run['timestamp'] or '')[:16]}  {run['benchmark']:<15} {run['dataset'] or '':<14} {run['label']}"
+            console.print(
+                Text.assemble(
+                    (run["id"], "dim"),
+                    f"  {(run['timestamp'] or '')[:16]}  {run['benchmark']:<15} {run['dataset'] or '':<14} ",
+                    (run["label"], "bold"),
+                )
             )
             for entry in db.execute(
                 "SELECT database, image, govec_commit, env, error FROM entries WHERE run_id = ? ORDER BY rowid",
                 (run["id"],),
             ):
-                failed = f"  FAILED: {entry['error']}" if entry["error"] else ""
-                print(
-                    f"    {entry['database']:<14} {_ran_as(entry['image'], entry['govec_commit'], entry['env'])}{failed}"
-                )
+                line = Text(f"    {entry['database']:<14} ", style=colors.result)
+                line.append_text(_ran_as(entry["image"], entry["govec_commit"], entry["env"]))
+                if entry["error"]:
+                    line.append(f"  FAILED: {entry['error']}", style=f"bold {colors.bad}")
+                console.print(line)
 
 
 def _run(args: argparse.Namespace) -> None:
@@ -116,7 +134,9 @@ def _compare(args: argparse.Namespace) -> None:
             patterns=args.metric or (),
             every=args.all,
         )
-    print("\n".join(lines))
+    console = _console()
+    for line in lines:
+        console.print(line)
 
 
 def build_parser() -> argparse.ArgumentParser:
