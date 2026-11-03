@@ -63,8 +63,20 @@ class QdrantAdapter(VectorDBAdapter):
         # measured latency (the govec and Chroma clients reuse one connection),
         # and 10k rapid single inserts exhaust Docker Desktop's port forwarding.
         # With grpc, every call the adapter makes goes over one gRPC channel instead.
+        #
+        # Over REST it asks for uncompressed responses. httpx asks for gzip by default, and Qdrant
+        # streams a gzipped response in chunks; on a Linux network a response of about 1-5 KB
+        # (k=8 to k=39 at DBpedia's payloads) then waited ~45 ms for its last chunk: Nagle on
+        # Qdrant's side against the client's delayed ACK. k=10 measured 44 ms on a Linux runner
+        # against 2.3 ms at k=5 and 2.7 ms at k=50. Docker Desktop's port forwarding hides it on a
+        # Mac. GoVec and Chroma don't compress, so uncompressed is also like for like.
         self._client = QdrantClient(
-            url=f"http://{host}:{port}", grpc_port=grpc_port, prefer_grpc=grpc, limits=httpx.Limits()
+            url=f"http://{host}:{port}",
+            grpc_port=grpc_port,
+            prefer_grpc=grpc,
+            limits=httpx.Limits(),
+            # Only over REST: qdrant-client sends headers on gRPC calls too.
+            headers=None if grpc else {"Accept-Encoding": "identity"},
         )
         # Qdrant needs the vector dimension at collection-creation time, unlike
         # Chroma's lazy collection -- create it on first insert instead, once

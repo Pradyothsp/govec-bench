@@ -135,6 +135,12 @@ the settings as environment variables. Nothing else: it runs as the engine's ser
 - **Time a restart from before `compose start`.** The server boots while that command runs;
   timing from after it measured little more than the probe (9 ms "restarts"; Chroma's probe
   makes several calls).
+- **Qdrant's gzipped REST responses stalled ~45 ms on Linux.** httpx asks for gzip, Qdrant
+  streams it in chunks, and a response of about 1-5 KB (k=8 to k=39 at DBpedia's payloads) waited
+  for its last chunk: Nagle on Qdrant's side against the client's delayed ACK. The first CI run
+  measured Qdrant's REST k=10 at 44 ms against 2.3 ms at k=5; Docker Desktop on a Mac hides it.
+  The adapter asks for uncompressed responses (`Accept-Encoding: identity`), as GoVec and Chroma
+  send. A latency that jumps at one k only is this kind of thing, not the database.
 - **Qdrant indexes after its upserts return.** Insert timings wait for indexing once, at the end
   of the load (`wait_until_indexed()`). Polling after every batch put the 50 ms poll interval
   inside each batch and made Qdrant look 5x slower than it is; skipping the wait on single
