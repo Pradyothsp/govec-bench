@@ -169,14 +169,28 @@ Two datasets, chosen with `DATASET=sift` (the default) or `DATASET=dbpedia`:
 - **One database at a time:** each benchmark starts only the container it measures, on fresh
   volumes.
 - **Search ef set explicitly** to 100 for every database, though it is each one's default.
-- **Stock settings** apart from matching HNSW parameters and the metric, with one exception:
-  Qdrant's two thresholds for building and using its HNSW index are lowered so it always does.
-  On stock settings it leaves segments under 10 MB unindexed and searches them by brute force:
-  all of SIFT 10k, and 15% of DBpedia 10k. `indexing_threshold` is set to 1 KB (0 would turn
-  indexing off), and `full_scan_threshold` to 10 KB, the API's minimum.
-- **Same client behaviour:** every adapter reuses one connection; GoVec is driven by its
-  published Python SDK over REST, as are Chroma and Qdrant through their official clients
-  (GoVec and Qdrant also over gRPC, in rows marked ‖).
+- **Stock settings** apart from matching HNSW parameters and the metric, and the changes listed
+  below, each made so every database does the same work under the same client behaviour.
+- **Official clients:** GoVec is driven by its published Python SDK over REST, as are Chroma and
+  Qdrant through theirs (GoVec and Qdrant also over gRPC, in rows marked ‖).
+
+### What the harness changes
+
+Every change from a database's or client's defaults, and why. Each was found by a measurement
+that didn't add up; the code comments in `govec_bench/adapters/` say more.
+
+| Database | Change | Why |
+|---|---|---|
+| All | One connection reused for every request | A new connection per request puts a TCP handshake inside every measured latency |
+| All | Search ef 100, set explicitly | It's each one's default; set so no result depends on a default changing |
+| GoVec | HNSW `M=16`, `ef_construction=100`, `ef_search=100` in `govec-config.yaml`; memory-mapped GoVec is told the dimension at start (`GOVEC_DIMENSIONS`) | Matching parameters; the mmap store sizes its slots from the dimension |
+| GoVec | SDK 0.1.3 or later | GoVec's SDK encoded REST requests with `json.dumps` up to 0.1.2, ~2 ms per call at 1536 dimensions, where Qdrant's client encodes in Rust. 0.1.3 uses orjson. Results before November 2026 used an earlier SDK and overstate GoVec's REST latency by that much. It's GoVec's own client, fixed in the SDK, not the harness |
+| Chroma | Cosine space and search ef set when the collection is created (`hnsw:space`, `hnsw:search_ef`) | Chroma 1.4.4 ignores a changed search ef on an existing collection |
+| Qdrant | Keep-alive turned back on (`limits=httpx.Limits()`) | qdrant-client turns it off for `localhost`, opening a connection per request, which also exhausted Docker Desktop's port forwarding during 10k single inserts |
+| Qdrant | REST responses uncompressed (`Accept-Encoding: identity`) | httpx asks for gzip and Qdrant streams it in chunks; on Linux a response of about 1–5 KB (k=8 to 39 here) waited ~45 ms for its last chunk, Nagle against delayed ACK. k=10 measured 44 ms against 2.3 ms at k=5. Docker Desktop on a Mac hid it, so the Mac results weren't affected. GoVec and Chroma don't compress |
+| Qdrant | `indexing_threshold` 1 KB, `full_scan_threshold` 10 KB; `m=16`, `ef_construct=100` written out | On stock settings Qdrant leaves segments under 10 MB unindexed and searches them by brute force: all of SIFT 10k, 15% of DBpedia 10k. 0 would turn indexing off; 10 KB is the API's minimum |
+| Qdrant | Inserts timed until indexed (`wait_until_indexed()`, polled once at the end of a load) | Qdrant indexes after its upserts return, while GoVec and Chroma index before; polling after every batch put the poll interval inside each batch instead |
+| Qdrant | String IDs stored as UUIDv5 points, the original ID in the payload, returned with each result | Qdrant accepts only integer or UUID IDs |
 
 ## Reproduce
 
