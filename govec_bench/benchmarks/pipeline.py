@@ -45,6 +45,8 @@ from govec_bench.benchmarks.common import (
     to_bench_args,
     wait_until_queryable,
 )
+from govec_bench.benchmarks.concurrency import ConcurrencyPoint, measure_concurrency
+from govec_bench.benchmarks.concurrency import K as CONCURRENT_K
 from govec_bench.benchmarks.insert import BATCH_SIZE, InsertStats, measure_batch_insert, measure_single_insert
 from govec_bench.benchmarks.memory import (
     FootprintStats,
@@ -99,6 +101,8 @@ class Record:
     memory: MemoryResult | None = None
     queries: list[QueryPoint] = field(default_factory=list)
     queries_grpc: list[QueryPoint] = field(default_factory=list)  # same index, other transport
+    concurrent_queries: list[ConcurrencyPoint] = field(default_factory=list)
+    concurrent_queries_grpc: list[ConcurrencyPoint] = field(default_factory=list)
     cold_start_loaded: LatencyStats | None = None
     cold_start_empty: LatencyStats | None = None
     single_insert: InsertStats | None = None
@@ -268,6 +272,43 @@ def measure_queries_grpc(run: Run) -> None:
     run.record.queries_grpc = measure_query_points(run.database.build_grpc_adapter(), run.workload, " over gRPC")
 
 
+def concurrency_text(point: ConcurrencyPoint) -> str:
+    errors = f", {point.errors} errors" if point.errors else ""
+    return (
+        f"{point.concurrency:>2} clients: {point.throughput_qps:,.0f} queries/s; {latency_text(point.latency)}, "
+        f"p99.9 {point.p999_ms:.2f}; recall {point.recall_mean:.4f}; "
+        f"CPU database {point.server_cpu_cores:.2f}, clients {point.client_cpu_cores:.2f}{errors}"
+    )
+
+
+def _expected_ids(workload: Workload) -> list[frozenset[str]]:
+    return [frozenset(workload.base.id_at(i) for i in truth[:CONCURRENT_K]) for truth in workload.groundtruth]
+
+
+def measure_concurrent_queries(run: Run) -> None:
+    run.record.concurrent_queries = measure_concurrency(
+        run.database.build_adapter,
+        run.container,
+        run.workload.queries,
+        _expected_ids(run.workload),
+        report=lambda point: show(concurrency_text(point)),
+    )
+
+
+def measure_concurrent_queries_grpc(run: Run) -> None:
+    if run.database.build_grpc_adapter is None:
+        show("no gRPC client for this database; skipped")
+        return
+
+    run.record.concurrent_queries_grpc = measure_concurrency(
+        run.database.build_grpc_adapter,
+        run.container,
+        run.workload.queries,
+        _expected_ids(run.workload),
+        report=lambda point: show(f"{concurrency_text(point)} (gRPC)"),
+    )
+
+
 def wait_until_answering(build_adapter: Callable[[], VectorDBAdapter], probe: Vector, timeout_s: float) -> None:
     # Not common.wait_until_queryable: its probe is reset(), which would delete the loaded data.
     # Answering a query means the data is back, not only that the process is up.
@@ -337,6 +378,18 @@ PIPELINE: list[Stage] = [
             Step("queries", "recall and query latency", measure_queries, needs=("settle",)),
             Step("queries-grpc", "recall and query latency over gRPC", measure_queries_grpc, needs=("settle",)),
             Step(
+                "concurrent-queries",
+                "throughput and latency with concurrent clients",
+                measure_concurrent_queries,
+                needs=("settle",),
+            ),
+            Step(
+                "concurrent-queries-grpc",
+                "throughput and latency with concurrent clients over gRPC",
+                measure_concurrent_queries_grpc,
+                needs=("settle",),
+            ),
+            Step(
                 "restart-loaded",
                 f"{RESTARTS} restarts with the data loaded",
                 measure_loaded_cold_start,
@@ -349,7 +402,17 @@ PIPELINE: list[Stage] = [
 ]
 
 # The steps that measure something; the rest prepare the index for them.
-MEASUREMENTS = ("batch-insert", "memory", "queries", "queries-grpc", "restart-loaded", "restart-empty", "single-insert")
+MEASUREMENTS = (
+    "batch-insert",
+    "memory",
+    "queries",
+    "queries-grpc",
+    "concurrent-queries",
+    "concurrent-queries-grpc",
+    "restart-loaded",
+    "restart-empty",
+    "single-insert",
+)
 
 
 def steps_of(pipeline: Sequence[Stage]) -> list[str]:
@@ -418,6 +481,13 @@ def result_to_json(result: Record, run_position: int, error: str | None = None) 
             payload[name] = {
                 f"k_{point.k}": {"recall": asdict(point.recall), "latency": asdict(point.latency)} for point in points
             }
+
+    for name, levels in (
+        ("concurrent_queries", result.concurrent_queries),
+        ("concurrent_queries_grpc", result.concurrent_queries_grpc),
+    ):
+        if levels:
+            payload[name] = {f"c_{point.concurrency}": asdict(point) for point in levels}
 
     return payload
 

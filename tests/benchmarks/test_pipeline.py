@@ -1,6 +1,7 @@
 import pytest
 
 from govec_bench.adapters.registry import select_databases
+from govec_bench.benchmarks.concurrency import ConcurrencyPoint
 from govec_bench.benchmarks.insert import InsertStats
 from govec_bench.benchmarks.memory import FootprintStats, MemoryResult, RamSample
 from govec_bench.benchmarks.pipeline import (
@@ -158,6 +159,66 @@ def test_result_to_json__grpc_queries__under_their_own_key() -> None:
 
     # Assert
     assert payload["queries_grpc"] == payload["queries"]
+
+
+def test_pipeline__concurrent_queries__after_the_one_at_a_time_ones_on_the_same_index() -> None:
+    # Arrange
+    loaded = PIPELINE[0]
+
+    # Act
+    names = [step.name for step in loaded.steps]
+
+    # Assert
+    assert names.index("queries-grpc") < names.index("concurrent-queries") < names.index("restart-loaded")
+    assert names.index("concurrent-queries") + 1 == names.index("concurrent-queries-grpc")
+
+
+def test_select_steps__concurrent_queries__pulls_in_the_load_and_nothing_else() -> None:
+    # Arrange
+    wanted = ["concurrent-queries"]
+
+    # Act
+    stages = select_steps(PIPELINE, wanted)
+
+    # Assert
+    assert [[step.name for step in stage.steps] for stage in stages] == [
+        ["batch-insert", "settle", "concurrent-queries"]
+    ]
+
+
+def test_result_to_json__concurrent_queries__one_key_per_concurrency_level() -> None:
+    # Arrange
+    point = ConcurrencyPoint(
+        concurrency=8,
+        queries=4_000,
+        throughput_qps=200.0,
+        latency=LatencyStats(mean_ms=40.0, p50_ms=38.0, p99_ms=80.0),
+        p999_ms=120.0,
+        recall_mean=0.98,
+        server_cpu_cores=1.95,
+        client_cpu_cores=1.2,
+        errors=0,
+    )
+    record = Record(concurrent_queries=[point])
+
+    # Act
+    payload = result_to_json(record, run_position=0)
+
+    # Assert
+    assert payload["concurrent_queries"] == {
+        "c_8": {
+            "concurrency": 8,
+            "queries": 4_000,
+            "throughput_qps": 200.0,
+            "latency": {"mean_ms": 40.0, "p50_ms": 38.0, "p99_ms": 80.0},
+            "p999_ms": 120.0,
+            "recall_mean": 0.98,
+            "server_cpu_cores": 1.95,
+            "client_cpu_cores": 1.2,
+            "errors": 0,
+        }
+    }
+    assert "concurrent_queries_grpc" not in payload
 
 
 def test_shuffled__database_names__every_name_once() -> None:

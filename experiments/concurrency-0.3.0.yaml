@@ -1,0 +1,18 @@
+description: >-
+  GoVec 0.3.0, Chroma and Qdrant under concurrent queries on DBpedia 100k: throughput and latency
+  at 1 to 32 client processes, over REST (and gRPC for GoVec and Qdrant), each database capped at
+  2 CPUs and 2 GB as in every run. The database's and the clients' CPU are recorded per level, to
+  tell a database at its cap from clients out of CPU.
+dataset: dbpedia
+size: large
+rounds: 3
+order: alternate
+steps: [concurrent-queries, concurrent-queries-grpc]
+arms:
+  - name: govec
+    database: govec
+    govec: ghcr.io/pradyothsp/govec:0.3.0
+  - name: chroma
+    database: chroma
+  - name: qdrant
+    database: qdrant
