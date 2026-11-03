@@ -1,0 +1,182 @@
+{
+  "benchmark": "pipeline",
+  "timestamp": "2026-11-03T22:15:40.820857+00:00",
+  "dataset": "dbpedia100k",
+  "setup": {
+    "qdrant": {
+      "service": "qdrant",
+      "image": "qdrant/qdrant:v1.19.0",
+      "image_id": "sha256:057ee3a8da769fe7310dd3537b4dc7583bf87a95ce8ac43c0af5a46bc580d1fc",
+      "govec_commit": null,
+      "env": {},
+      "memory_limit_bytes": 2147483648
+    }
+  },
+  "results": {
+    "qdrant": {
+      "run_position": 2,
+      "batch_insert": {
+        "total_s": 118.87697965999996,
+        "per_vector_ms": 1.1887697965999995,
+        "calls": {
+          "mean_ms": 1.13387350685,
+          "p50_ms": 0.6796374749978895,
+          "p99_ms": 5.278651300401407
+        }
+      },
+      "cold_start_loaded": {
+        "mean_ms": 297.8433002001111,
+        "p50_ms": 286.4419860002272,
+        "p99_ms": 390.7522839198009
+      },
+      "cold_start_empty": {
+        "mean_ms": 191.49506920011845,
+        "p50_ms": 174.3131030002587,
+        "p99_ms": 231.5172448805879
+      },
+      "single_insert": {
+        "total_s": 48.3259952530002,
+        "per_vector_ms": 4.8325995253000205,
+        "calls": {
+          "mean_ms": 4.769652691699503,
+          "p50_ms": 1.7634819998875173,
+          "p99_ms": 69.34978652981044
+        }
+      },
+      "memory": {
+        "baseline": {
+          "disk_bytes": 357,
+          "disk_allocated_bytes": 20480,
+          "ram_bytes": 19975372,
+          "ram_process_bytes": 17825792,
+          "ram_file_cache_bytes": 8192
+        },
+        "delta_disk_bytes": 830062261,
+        "delta_disk_allocated_bytes": 680144896,
+        "ram_series": [
+          {
+            "t_s": 0,
+            "ram_bytes": 114609356,
+            "process_bytes": 44134400,
+            "file_cache_bytes": 628891648
+          },
+          {
+            "t_s": 60,
+            "ram_bytes": 101963530,
+            "process_bytes": 31801344,
+            "file_cache_bytes": 628891648
+          }
+        ],
+        "delta_ram_bytes_peak": 94633984,
+        "delta_ram_bytes_last_sample": 81988158
+      },
+      "queries": {
+        "k_1": {
+          "recall": {
+            "mean": 1.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 2.152201829999285,
+            "p50_ms": 2.1406089999800315,
+            "p99_ms": 2.8391293700133247
+          }
+        },
+        "k_5": {
+          "recall": {
+            "mean": 0.992,
+            "min": 0.8,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 2.218854779976027,
+            "p50_ms": 2.14676799987501,
+            "p99_ms": 6.151705969941759
+          }
+        },
+        "k_10": {
+          "recall": {
+            "mean": 0.989,
+            "min": 0.9,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 2.129723370017018,
+            "p50_ms": 2.1232075002899364,
+            "p99_ms": 2.5617035396408028
+          }
+        },
+        "k_50": {
+          "recall": {
+            "mean": 0.981,
+            "min": 0.82,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 2.3183860199969786,
+            "p50_ms": 2.3227780002343934,
+            "p99_ms": 2.72805591004726
+          }
+        }
+      },
+      "queries_grpc": {
+        "k_1": {
+          "recall": {
+            "mean": 1.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 1.62953150998419,
+            "p50_ms": 1.6403859999627457,
+            "p99_ms": 2.3223519802650117
+          }
+        },
+        "k_5": {
+          "recall": {
+            "mean": 0.992,
+            "min": 0.8,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 1.7018714000187174,
+            "p50_ms": 1.7144379999081139,
+            "p99_ms": 2.1325900999681835
+          }
+        },
+        "k_10": {
+          "recall": {
+            "mean": 0.989,
+            "min": 0.9,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 1.7441712199843096,
+            "p50_ms": 1.7296354999416508,
+            "p99_ms": 2.3536707401126478
+          }
+        },
+        "k_50": {
+          "recall": {
+            "mean": 0.981,
+            "min": 0.82,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 2.284652400021514,
+            "p50_ms": 2.205922500024826,
+            "p99_ms": 13.034045249864903
+          }
+        }
+      }
+    }
+  },
+  "experiment": {
+    "name": "release-0.3.0",
+    "session": "20261103T213500Z",
+    "round": 2,
+    "arm": "qdrant",
+    "position": 2
+  }
+}

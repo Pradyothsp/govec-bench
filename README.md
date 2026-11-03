@@ -7,93 +7,97 @@ reproduce the numbers.
 
 ## Results
 
-> Measured on October 8, 2026, against GoVec 0.2.1. The DBpedia 100k and SIFT 10k tables are
-> medians of three runs, each with the databases in a fresh random order; the gRPC rows and the
-> memory-mapped comparison are medians of three further runs each; the DBpedia 10k row and SIFT's
-> RAM and disk at 100k are single runs. The ef sweep is a single run from October 6, with
-> GoVec as the 0.2.0 image. The earlier SIFT-only results (GoVec 0.1.0, `ef_search=50`) are at
-> harness tag [`v0.1.0`](https://github.com/Pradyothsp/govec-bench/tree/v0.1.0). The raw runs
-> behind every figure are in [`results/published/`](results/published/).
+> Measured on November 3, 2026, against GoVec 0.3.0, on a GitHub-hosted runner (`ubuntu-latest`:
+> AMD EPYC 9V45, 4 vCPUs, 16 GB, Docker on Linux) with
+> [`.github/workflows/bench.yml`](.github/workflows/bench.yml). The DBpedia 100k figures are
+> medians of three rounds of one session, `experiments/release-0.3.0.yaml`, every database run
+> once per round in an order that reverses each round; GoVec 0.2.1 ran in the same session for
+> the comparison below. The SIFT table and the ef sweep weren't re-run: they are from October
+> runs on a Mac, with older GoVec, and say so where they appear. The raw runs behind every figure
+> are in [`results/published/`](results/published/) (this session in `sessions/release-0.3.0/`).
 
-On a MacBook (Apple Silicon) with Docker Desktop, one database at a time, 2 CPUs and 2 GB each.
-Every database builds HNSW with `M=16`, `ef_construction=100` and searches with ef 100, cosine.
+One database at a time, 2 CPUs and 2 GB each. Every database builds HNSW with `M=16`,
+`ef_construction=100` and searches with ef 100, cosine. What the harness changes from each
+database's defaults, and why, is listed under [Setup](#what-the-harness-changes).
 
 ### Text embeddings: DBpedia, 1536 dimensions, 100k vectors
 
-From `task bench:pipeline` (`SIZE=large`): every number for a database comes from one index.
+From the pipeline at `SIZE=large`: every number for a database comes from one index.
 
 | | GoVec | GoVec (int8) | Chroma | Qdrant |
 |---|---:|---:|---:|---:|
-| Query latency, k=10 (mean) | 6.08 ms | 6.25 ms | 5.53 ms | **4.87 ms** |
-| *the same at 10k vectors* | *4.85 ms* | *5.15 ms* | *5.26 ms* | ***4.75 ms*** |
-| Query latency over gRPC, k=10 (mean)‖ | 3.80 ms | | | 4.49 ms |
-| Single insert, per vector (10k set) | **4.64 ms** | 4.92 ms | 12.15 ms | 4.69 ms |
-| Batch insert, per vector | 1.96 ms | 2.03 ms | 2.14 ms | **1.10 ms**† |
-| Recall@1 | **100%** | 86.0% | 99.0% | **100%** |
-| Recall@10 | 98.3% | 88.4% | 98.5% | **99.3%** |
-| Recall@50 | 96.6% | 89.0% | 96.8% | **98.1%** |
-| Restart with the data loaded (median)§ | 873 ms | 612 ms | 309 ms | **211 ms** |
-| RAM | 1,338 MB | 458 MB | 712 MB | 354 MB* |
-| Disk (allocated) | 632 MB | **171 MB** | 659 MB | 776 MB |
+| Query latency, k=10 (mean) | 3.17 ms | 4.72 ms | 2.17 ms | **2.13 ms** |
+| Query latency over gRPC, k=10 (mean)‖ | 2.72 ms | 4.34 ms | | 1.74 ms |
+| Single insert, per vector (10k set) | **1.54 ms** | 2.42 ms | 8.35 ms | 4.25 ms |
+| Batch insert, per vector | 0.75 ms | 1.44 ms | **0.65 ms** | 1.19 ms† |
+| Recall@1 | 99.0% | 86.0% | 99.0% | **100%** |
+| Recall@10 | 98.3% | 88.6% | 98.6% | **99.0%** |
+| Recall@50 | 96.5% | 89.1% | 96.8% | **98.0%** |
+| Restart with the data loaded (median)§ | 928 ms | 713 ms | 489 ms | **290 ms** |
+| RAM, the database's process | 1,299 MB | 451 MB | 682 MB | 14 MB* |
+| RAM, docker stats | 1,320 MB | 457 MB | 703 MB | 83 MB* |
+| Disk (allocated) | 632 MB | **171 MB** | 659 MB | 680 MB |
 
-### Image descriptors: SIFT, 128 dimensions, 10k vectors (RAM and disk at 100k)
+\* Qdrant keeps its vectors in memory-mapped files by default, so they sit in the OS file cache
+(666 MB here), not in its process, and docker stats counts only the part of that cache in active
+use. It isn't comparable with GoVec's and Chroma's figures, which hold every vector in their
+process. Compare it with GoVec's own memory-mapped mode [below](#govec-in-memory-and-memory-mapped).
+† Qdrant's upserts return before its index is built, and it indexes in the background on both
+CPUs; the figure includes waiting for that to finish.
+§ Timed from `docker compose start`, so every figure includes Docker starting the container.
+GoVec reads its whole snapshot into memory before it answers; Qdrant and Chroma map their files
+and answer at once, reading pages in as queries touch them. Empty, every database answers within
+155–240 ms, almost all of it Docker's, so that's not in the table.
+‖ The same index, queried through each client's gRPC mode (Chroma's client has none); recall
+matched REST. These rows compare client libraries as much as databases.
 
-| | GoVec | GoVec (int8) | Chroma | Qdrant |
-|---|---:|---:|---:|---:|
-| Query latency, k=10 (mean) | 2.07 ms | **1.91 ms** | 2.93 ms | 2.33 ms |
-| Query latency over gRPC, k=10 (mean)‖ | 0.81 ms | | | 1.95 ms |
-| Single insert, per vector | 1.94 ms | 1.82 ms | 6.69 ms | **1.70 ms** |
-| Batch insert, per vector | 0.18 ms | 0.19 ms | 0.22 ms | **0.11 ms**† |
-| Recall@1 | 99.0% | 96.0% | 99.0% | **100%** |
-| Recall@10 | 99.8% | 93.9% | 99.8% | **100%** |
-| Recall@50 | 99.7% | 96.2% | 99.7% | **99.8%** |
-| RAM | 242 MB | 168 MB | **108 MB** | 315 MB* |
-| Disk (allocated) | 67 MB | **29 MB** | 87 MB | 193 MB |
+### GoVec 0.3.0 against 0.2.1
 
-\* Qdrant keeps its vectors on disk by default and lets the OS cache only part of them, so its
-figure is mostly file cache and depends on how much of it is cached when sampled: 296–468 MB
-across the three DBpedia 100k runs. It isn't comparable with GoVec's and Chroma's, which hold every
-vector in memory. Compare it with GoVec's own disk-backed mode
-[below](#govec-in-memory-and-memory-mapped).
-† Qdrant's upserts return before its index is built and it indexes in the background on both
-CPUs; the figure includes waiting for that to finish. Qdrant's indexing threshold is lowered so
-it indexes at all (see [Setup](#setup)).
-§ Timed from `docker compose start`, so every figure includes about 130 ms of Docker starting the
-container. GoVec reads its whole snapshot into memory before it answers; Qdrant and Chroma map
-their files and answer at once, reading pages in as queries touch them. Empty, every database
-answers within 130–180 ms, almost all of it Docker's, so that's not in the tables.
-‖ The same index queried through each client's gRPC mode (Chroma's client has none), from three
-separate runs of GoVec and Qdrant side by side; recall matched REST exactly in every run. In
-those runs, REST at k=10 was 6.10 ms for GoVec and 3.88 ms for Qdrant on DBpedia, and 2.13 ms and
-2.36 ms on SIFT. gRPC cut GoVec's latency by 38–57% but didn't help Qdrant's: 13% slower on
-DBpedia, 4% faster on SIFT, and 39% slower on SIFT at k=50. Qdrant's Python client likely spends
-what gRPC saves on turning each response into its own model objects. These rows compare client
-libraries as much as databases, so no figure in them is marked best.
+Both releases in the same session, in alternating order, DBpedia 100k:
+
+| | 0.2.1 | 0.3.0 | Change |
+|---|---:|---:|---:|
+| Query latency, k=10 (mean) | 5.58 ms | 3.17 ms | −43% |
+| Query latency over gRPC, k=10 (mean) | 5.26 ms | 2.72 ms | −48% |
+| Batch insert, per vector | 1.43 ms | 0.75 ms | −47% |
+| Single insert, per vector (10k set) | 2.40 ms | 1.54 ms | −36% |
+| Restart with the data loaded (median) | 1,320 ms | 928 ms | −30% |
+| Recall@10 | 98.2% | 98.3% | level |
+| RAM, process | 1,305 MB | 1,299 MB | level |
+
+Every run of 0.3.0 beat every run of 0.2.1 on each of the first five rows. 0.3.0 computes the
+float32 dot product with SIMD (AVX2 on this runner), allocates far less per search, and loads its
+snapshot without copying each vector three times.
 
 ### GoVec in memory and memory-mapped
 
-GoVec can keep its vectors in memory-mapped files instead of its heap (`enable_mmap`). Same data,
-DBpedia 100k, medians of three runs of the two side by side (`--db govec --db govec-mmap`):
+GoVec can keep its vectors in memory-mapped files instead of its heap (`enable_mmap`). Same
+session, DBpedia 100k:
 
 | | In memory (default) | Memory-mapped |
 |---|---:|---:|
-| RAM in use (docker stats) | 1,336 MB | **836 MB** |
-| of which the GoVec process | 1,307 MB | **152 MB** |
+| RAM, GoVec's process | 1,299 MB | **153 MB** |
+| File cache | 632 MB | 624 MB |
+| RAM, docker stats | 1,320 MB | 174 MB |
 | Disk (allocated) | 632 MB | 632 MB |
-| Recall@10 | 98.4% | 98.3% |
-| Query latency, k=10 (mean) | 6.18 ms | 6.16 ms |
-| Query latency, k=10 (p99) | 8.32 ms | 7.93 ms |
-| Batch insert, per vector | 1.97 ms | 1.96 ms |
-| Restart with the data loaded (median) | 949 ms | **467 ms** |
+| Recall@10 | 98.3% | 98.6% |
+| Query latency, k=10 (mean) | 3.17 ms | 3.01 ms |
+| Query latency, k=10 (p99) | 4.09 ms | 3.90 ms |
+| Batch insert, per vector | 0.75 ms | 0.80 ms |
+| Restart with the data loaded (median) | 928 ms | **561 ms** |
 
-Memory-mapped, the vectors live in the OS file cache instead of the Go heap: 37% less memory in
-use, half the restart time, and the same recall, disk and query latency, with the data fitting
-under the 2 GB cap. Query speed is the least settled figure: in an earlier set of three runs,
-memory-mapped queries were 27% slower in every run, and here they're level. The cause isn't
-pinned down; the likeliest is how much of the files the OS kept cached, which a memory-mapped
-search depends on and the in-memory one doesn't.
+Memory-mapped, the vectors live in the OS file cache instead of the Go heap. In memory, the file
+cache holds the snapshot file, which the server doesn't need once it's loaded and the OS can
+reclaim; memory-mapped, it holds the vectors searches read. So what memory-mapped GoVec needs is
+its process plus the file cache, about 777 MB against 1,299 MB in memory, with the same recall,
+query latency and disk, and a 40% faster restart. docker stats shows 174 MB because GoVec tells
+the OS it reads the files at random, and docker stats leaves out file pages that aren't in
+active use: read the process and file cache rows.
 
 ### Recall against latency: the ef sweep (DBpedia, 10k vectors)
+
+> From October 6, on a Mac with Docker Desktop, with GoVec 0.2.0: not re-run on 0.3.0, and not
+> comparable with the figures above.
 
 Each database at five search ef values, median query latency at k=10. Recall@10 across the three
 databases is within 3 points at ef 25 and within 0.1 point from ef 100 up.
@@ -105,33 +109,48 @@ databases is within 3 points at ef 25 and within 0.1 point from ef 100 up.
 | 200 | 100% | 5.93 ms | 6.89 ms | **4.67 ms** |
 | 400 | 100% | 7.83 ms | 9.29 ms | **5.09 ms** |
 
-What the numbers say:
+### Image descriptors: SIFT, 128 dimensions, 10k vectors (RAM and disk at 100k)
 
-- **Recall:** at the same ef, all three find the same neighbours: 97–100% at k=10. At 100k a single
-  index build moves recall by about a point, so the order between them in one run means little.
-- **Queries on text embeddings:** at 10k vectors GoVec is level with Qdrant at ef 100. At 100k it
-  is the slowest: 1.1x Chroma and 1.25x Qdrant. Its latency grows 25% from 10k to 100k while
-  Chroma's and Qdrant's grow 3–5%, and higher ef widens the gap (at 10k, Qdrant is 1.3x faster at
-  ef 200 and 1.5x at ef 400). GoVec's distance computation is plain Go without SIMD, and its graph
-  stores neighbour lists as pointers, which costs more as the graph outgrows the CPU caches.
-  These are end-to-end figures, each through its database's Python client, and the client
-  matters as much as the database: through each one's fastest client, GoVec over gRPC (3.80 ms)
-  and Qdrant over REST (3.88 ms in the same runs) are level at 100k. The growth from 10k to 100k
-  is the better measure of search itself, and there GoVec falls behind.
-- **Queries on SIFT:** at 128 dimensions search is cheap: GoVec answers in under 1 ms over gRPC,
-  and Chroma's and Qdrant's latency barely changes from ef 25 to 400. What the table measures there
-  is mostly each client library and HTTP, so it says little about the databases.
-- **Inserts:** Qdrant loads fastest in batches, 1.6–1.8x faster than GoVec, by indexing in
-  the background on both CPUs. One at a time, GoVec and Qdrant are level on text embeddings and
-  Qdrant is 12% faster on SIFT. Chroma's single inserts are 2.6–3.9x slower than the fastest.
-- **Restarts:** with 100k vectors loaded, GoVec is the slowest to answer (about 0.9 s), since it
-  reads everything back first; Qdrant takes 0.2 s and Chroma 0.3 s.
-- **Where GoVec loses:** query latency at 100k, batch inserts, restarts with data, and RAM: in
-  memory it holds about 1.9x Chroma's, roughly twice the raw vectors (an upper bound for Go; see
-  [Caveats](#caveats)). Its memory-mapped mode cuts memory in use by 37% and halves restart
-  time; see below.
-- **int8 quantization** cuts GoVec's disk by 57–73% and RAM by 31–66%, but costs 6–10 points of
-  recall, most on text embeddings: its value range doesn't fit embedding vectors well yet.
+> From October 8, on a Mac with Docker Desktop, with GoVec 0.2.1: medians of three runs, gRPC
+> from three further runs, RAM and disk at 100k a single run. Not re-run on 0.3.0, and not
+> comparable with the DBpedia figures above. Qdrant's REST figures there predate the
+> uncompressed-response change, which makes no difference on a Mac (checked: k=10 2.19 ms
+> before it, between k=5's 2.08 and k=50's 2.77).
+
+| | GoVec | GoVec (int8) | Chroma | Qdrant |
+|---|---:|---:|---:|---:|
+| Query latency, k=10 (mean) | 2.07 ms | **1.91 ms** | 2.93 ms | 2.33 ms |
+| Query latency over gRPC, k=10 (mean)‖ | 0.81 ms | | | 1.95 ms |
+| Single insert, per vector | 1.94 ms | 1.82 ms | 6.69 ms | **1.70 ms** |
+| Batch insert, per vector | 0.18 ms | 0.19 ms | 0.22 ms | **0.11 ms**† |
+| Recall@1 | 99.0% | 96.0% | 99.0% | **100%** |
+| Recall@10 | 99.8% | 93.9% | 99.8% | **100%** |
+| Recall@50 | 99.7% | 96.2% | 99.7% | **99.8%** |
+| RAM (docker stats) | 242 MB | 168 MB | **108 MB** | 315 MB* |
+| Disk (allocated) | 67 MB | **29 MB** | 87 MB | 193 MB |
+
+### What the numbers say
+
+- **Recall:** at the same ef, all three find the same neighbours on text embeddings: recall@10
+  98.3–99.0%. Qdrant's recall@50 is about a point higher.
+- **Queries on text embeddings:** at 100k GoVec is the slowest, 1.5x Chroma and Qdrant over REST
+  (3.17 ms against 2.17 and 2.13) and 1.6x Qdrant over gRPC, though 0.3.0 nearly halved it. Its
+  graph stores neighbour lists as pointers, which costs more as the graph outgrows the CPU caches.
+- **Queries on SIFT** (October, Mac): at 128 dimensions search is cheap, so the table measures
+  mostly each client library and HTTP, and says little about the databases.
+- **Inserts:** one at a time, GoVec is fastest: 2.8x faster than Qdrant and 5.4x faster than
+  Chroma. In batches, Chroma is 13% faster than GoVec and Qdrant 1.6x slower, its figure including
+  the background indexing it does after its upserts return.
+- **Restarts:** with 100k vectors loaded, GoVec is the slowest to answer (0.93 s, or 0.56 s
+  memory-mapped), since it reads its whole snapshot first; Chroma takes 0.49 s and Qdrant 0.29 s.
+- **Where GoVec loses:** query latency at 100k, batch inserts against Chroma, restarts with data,
+  and RAM: in memory its process holds 1.9x Chroma's, about twice the raw vectors (an upper bound
+  for Go; see [Caveats](#caveats)). Memory-mapped, it needs about 40% less and restarts 40%
+  faster.
+- **int8 quantization** cuts GoVec's disk by 73% and its process memory by 65%, but costs about
+  10 points of recall on text embeddings, whose value range it doesn't fit well yet. In 0.3.0 it
+  is also slower to search than float32 (4.72 ms against 3.17), since only the float32 dot product
+  uses SIMD so far, and its batch inserts take twice as long.
 
 ## What's measured
 
@@ -160,7 +179,7 @@ Two datasets, chosen with `DATASET=sift` (the default) or `DATASET=dbpedia`:
 
 | Database | Image | Index |
 |---|---|---|
-| GoVec | `ghcr.io/pradyothsp/govec:0.2.1` | HNSW, `M=16`, `ef_construction=100`, `ef_search=100`, cosine (set in `govec-config.yaml`) |
+| GoVec | `ghcr.io/pradyothsp/govec:0.3.0` | HNSW, `M=16`, `ef_construction=100`, `ef_search=100`, cosine (set in `govec-config.yaml`) |
 | GoVec (int8) | the same, with `quantization: scalar` | as above, vectors stored as int8 |
 | Chroma | Chroma 1.4.4, pinned by digest | HNSW, its defaults (`M=16`, `ef_construction=100`, `ef_search=100`), cosine |
 | Qdrant | `qdrant/qdrant:v1.19.0` | HNSW, its defaults (`m=16`, `ef_construct=100`, search ef 100), cosine; `indexing_threshold` and `full_scan_threshold` lowered (below) |
@@ -207,6 +226,13 @@ task bench:sweep       # recall against latency across search ef
 DATASET=dbpedia SIZE=large task bench:pipeline   # everything at 100k text embeddings
 ```
 
+The published DBpedia figures come from an experiment run on a GitHub-hosted runner, all
+databases in one job; from a fork with Actions enabled:
+
+```bash
+gh workflow run bench.yml -f experiment=release-0.3.0   # about 1.5 hours; the session comes back as an artifact
+```
+
 The pipeline writes `results/pipeline_<timestamp>.json`, with one section per database and
 what each ran as (image, image ID, settings) under `setup`, and indexes it in `results/bench.db`
 (SQLite: one row per metric per database per run). `task results:import` rebuilds that index from
@@ -226,26 +252,29 @@ shows the session live, and `task bench:ui` browses every session with a plot of
 
 ## Run-to-run variation
 
-Latency on a laptop moves between runs by tens of percent, and whole nights shift together: in
-an earlier set of three runs every database's single inserts were 2–9% slower than in the
+Latency moves between runs by tens of percent, and whole sessions shift together: on a laptop,
+in an earlier set of three runs every database's single inserts were 2–9% slower than in the
 published set, and Qdrant's 30% slower, with no change to any image or code path. So the tables
-are medians of three runs, each run starts the databases in a fresh random order (recorded in
-the results as `run_position`), and they compare databases within the same set. In one DBpedia
-100k run Qdrant's k=10 p99 was 82 ms against about 7 ms in the other two; the medians aren't
-moved by it.
+are medians of three rounds, every database run once per round in an order that reverses each
+round, and they compare databases within the same session, on the same machine. A shared cloud
+runner varies too: in the published session the widest ranges are p99 latencies (GoVec's k=10
+p99 3.58–8.51 ms across its three rounds); most means moved by a few percent, the most about 20%
+(GoVec int8's k=10, 4.65–5.63 ms). `task results:compare SESSION=release-0.3.0` prints each figure's range.
 
 ## Caveats
 
-- **A laptop, through Docker Desktop.** Docker Desktop on macOS makes `fsync` unusually cheap,
-  which flatters every database's write path. The numbers compare the databases with each other,
-  not with production hardware.
+- **A shared cloud VM.** The DBpedia figures come from a GitHub-hosted runner: 4 vCPUs shared
+  with other tenants, the benchmark client on the same VM as the database (each database capped
+  at 2 CPUs). They compare the databases with each other, not with dedicated production hardware.
+  Docker runs natively on Linux there. The older sections ran on a Mac through Docker Desktop,
+  which makes `fsync` unusually cheap and flatters every database's write path.
 - **GoVec's RAM is an upper bound.** RSS reflects when Go's garbage collector returns memory, not
   live data; the same load has measured anywhere from 115 MB (live heap) to 593 MB (RSS) depending
   on timing. Setting `GOMEMLIMIT` cuts the measured figure by about 46%, but it's left off so
   every database runs on stock settings.
-- **Size changes the picture.** GoVec's query latency on text embeddings grows 25% from 10k to
-  100k vectors while the others' grow 3–5%, and recall moves too. Results are shown at 100k where
-  it matters; at millions of vectors they would shift again.
+- **Size changes the picture.** In October, on a Mac with GoVec 0.2.1, GoVec's query latency on
+  text embeddings grew 25% from 10k to 100k vectors while the others' grew 3–5%, and recall moves
+  too. Results are shown at 100k where it matters; at millions of vectors they would shift again.
 - **Recall moves between builds.** HNSW graphs differ slightly between builds, so recall moves
   by about one query in a hundred between runs. In about 1 SIFT build in 11 (4 of 46, in earlier
   runs), Qdrant's graph search at ef 100 misses one query's neighbourhood entirely, the same way

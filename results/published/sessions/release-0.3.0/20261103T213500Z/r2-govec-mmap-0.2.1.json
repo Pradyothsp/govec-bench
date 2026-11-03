@@ -1,0 +1,184 @@
+{
+  "benchmark": "pipeline",
+  "timestamp": "2026-11-03T22:06:49.166856+00:00",
+  "dataset": "dbpedia100k",
+  "setup": {
+    "govec-mmap": {
+      "service": "govec",
+      "image": "ghcr.io/pradyothsp/govec:0.2.1",
+      "image_id": "sha256:3e7fe234073c75185f6ab700ddb6a1aab7d09e2153d3ce0d78f485ff8fc2ddc7",
+      "govec_commit": null,
+      "env": {
+        "GOVEC_ENABLE_MMAP": "true"
+      },
+      "memory_limit_bytes": 2147483648
+    }
+  },
+  "results": {
+    "govec-mmap": {
+      "run_position": 0,
+      "batch_insert": {
+        "total_s": 142.20529188399996,
+        "per_vector_ms": 1.4220529188399995,
+        "calls": {
+          "mean_ms": 1.3933051436400137,
+          "p50_ms": 1.3990192399990065,
+          "p99_ms": 2.0620627682991426
+        }
+      },
+      "cold_start_loaded": {
+        "mean_ms": 670.9229858000526,
+        "p50_ms": 666.1913469999945,
+        "p99_ms": 711.0248139600025
+      },
+      "cold_start_empty": {
+        "mean_ms": 168.47045100003015,
+        "p50_ms": 157.3166420000689,
+        "p99_ms": 260.67244099994247
+      },
+      "single_insert": {
+        "total_s": 23.558842840999887,
+        "per_vector_ms": 2.355884284099989,
+        "calls": {
+          "mean_ms": 2.3237804013005188,
+          "p50_ms": 2.206646499985254,
+          "p99_ms": 4.220293080040847
+        }
+      },
+      "memory": {
+        "baseline": {
+          "disk_bytes": 4358,
+          "disk_allocated_bytes": 8192,
+          "ram_bytes": 13621002,
+          "ram_process_bytes": 12738560,
+          "ram_file_cache_bytes": 4096
+        },
+        "delta_disk_bytes": 1090853537,
+        "delta_disk_allocated_bytes": 631578624,
+        "ram_series": [
+          {
+            "t_s": 0,
+            "ram_bytes": 778987110,
+            "process_bytes": 150720512,
+            "file_cache_bytes": 623976448
+          },
+          {
+            "t_s": 60,
+            "ram_bytes": 778987110,
+            "process_bytes": 150724608,
+            "file_cache_bytes": 623976448
+          }
+        ],
+        "delta_ram_bytes_peak": 765366108,
+        "delta_ram_bytes_last_sample": 765366108
+      },
+      "queries": {
+        "k_1": {
+          "recall": {
+            "mean": 0.98,
+            "min": 0.0,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 5.195872209999379,
+            "p50_ms": 5.268225999998322,
+            "p99_ms": 8.13951569008168
+          }
+        },
+        "k_5": {
+          "recall": {
+            "mean": 0.974,
+            "min": 0.2,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 5.108191130013893,
+            "p50_ms": 5.09382900008859,
+            "p99_ms": 7.133651189994907
+          }
+        },
+        "k_10": {
+          "recall": {
+            "mean": 0.98,
+            "min": 0.5,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 5.24519354001086,
+            "p50_ms": 5.213600500042048,
+            "p99_ms": 7.8847726600201895
+          }
+        },
+        "k_50": {
+          "recall": {
+            "mean": 0.9628,
+            "min": 0.72,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 5.4000391800127545,
+            "p50_ms": 5.404113000054167,
+            "p99_ms": 7.56128703002787
+          }
+        }
+      },
+      "queries_grpc": {
+        "k_1": {
+          "recall": {
+            "mean": 0.98,
+            "min": 0.0,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 4.706428319987026,
+            "p50_ms": 4.821211000034964,
+            "p99_ms": 5.863041760069336
+          }
+        },
+        "k_5": {
+          "recall": {
+            "mean": 0.974,
+            "min": 0.2,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 4.951499029991737,
+            "p50_ms": 4.920528500065302,
+            "p99_ms": 11.01324628004022
+          }
+        },
+        "k_10": {
+          "recall": {
+            "mean": 0.98,
+            "min": 0.5,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 4.676810299999943,
+            "p50_ms": 4.726228000095034,
+            "p99_ms": 5.876051360055499
+          }
+        },
+        "k_50": {
+          "recall": {
+            "mean": 0.9628,
+            "min": 0.72,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 5.1581144299871085,
+            "p50_ms": 5.044870000006085,
+            "p99_ms": 9.36470003992099
+          }
+        }
+      }
+    }
+  },
+  "experiment": {
+    "name": "release-0.3.0",
+    "session": "20261103T213500Z",
+    "round": 2,
+    "arm": "govec-mmap-0.2.1",
+    "position": 0
+  }
+}

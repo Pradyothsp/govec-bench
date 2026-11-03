@@ -1,0 +1,182 @@
+{
+  "benchmark": "pipeline",
+  "timestamp": "2026-11-03T22:52:27.816556+00:00",
+  "dataset": "dbpedia100k",
+  "setup": {
+    "govec": {
+      "service": "govec",
+      "image": "ghcr.io/pradyothsp/govec:0.2.1",
+      "image_id": "sha256:3e7fe234073c75185f6ab700ddb6a1aab7d09e2153d3ce0d78f485ff8fc2ddc7",
+      "govec_commit": null,
+      "env": {},
+      "memory_limit_bytes": 2147483648
+    }
+  },
+  "results": {
+    "govec": {
+      "run_position": 5,
+      "batch_insert": {
+        "total_s": 141.69235416499941,
+        "per_vector_ms": 1.4169235416499941,
+        "calls": {
+          "mean_ms": 1.3882710335101365,
+          "p50_ms": 1.4092666499982442,
+          "p99_ms": 2.005501642005129
+        }
+      },
+      "cold_start_loaded": {
+        "mean_ms": 1307.6300641998387,
+        "p50_ms": 1314.5377439996082,
+        "p99_ms": 1322.9071575608216
+      },
+      "cold_start_empty": {
+        "mean_ms": 179.67734879985073,
+        "p50_ms": 165.57433500020124,
+        "p99_ms": 215.518452180022
+      },
+      "single_insert": {
+        "total_s": 24.04084758999943,
+        "per_vector_ms": 2.404084758999943,
+        "calls": {
+          "mean_ms": 2.3736194378985602,
+          "p50_ms": 2.2688770000058867,
+          "p99_ms": 4.412751150566692
+        }
+      },
+      "memory": {
+        "baseline": {
+          "disk_bytes": 256,
+          "disk_allocated_bytes": 4096,
+          "ram_bytes": 13673431,
+          "ram_process_bytes": 12730368,
+          "ram_file_cache_bytes": 4096
+        },
+        "delta_disk_bytes": 632118837,
+        "delta_disk_allocated_bytes": 632119296,
+        "ram_series": [
+          {
+            "t_s": 0,
+            "ram_bytes": 1338956054,
+            "process_bytes": 1317658624,
+            "file_cache_bytes": 632119296
+          },
+          {
+            "t_s": 60,
+            "ram_bytes": 1338956054,
+            "process_bytes": 1317654528,
+            "file_cache_bytes": 632119296
+          }
+        ],
+        "delta_ram_bytes_peak": 1325282623,
+        "delta_ram_bytes_last_sample": 1325282623
+      },
+      "queries": {
+        "k_1": {
+          "recall": {
+            "mean": 0.99,
+            "min": 0.0,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 5.1850203399772,
+            "p50_ms": 5.2123695004411275,
+            "p99_ms": 8.001842939629569
+          }
+        },
+        "k_5": {
+          "recall": {
+            "mean": 0.978,
+            "min": 0.2,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 5.082460279963925,
+            "p50_ms": 5.146284000147716,
+            "p99_ms": 6.513577889891167
+          }
+        },
+        "k_10": {
+          "recall": {
+            "mean": 0.982,
+            "min": 0.5,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 5.050466839993533,
+            "p50_ms": 5.140611999649991,
+            "p99_ms": 6.595529930209523
+          }
+        },
+        "k_50": {
+          "recall": {
+            "mean": 0.9638,
+            "min": 0.72,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 5.404438949981341,
+            "p50_ms": 5.461011999614129,
+            "p99_ms": 6.8845626005168015
+          }
+        }
+      },
+      "queries_grpc": {
+        "k_1": {
+          "recall": {
+            "mean": 0.99,
+            "min": 0.0,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 5.88117198002692,
+            "p50_ms": 5.536600999676011,
+            "p99_ms": 16.329447269890807
+          }
+        },
+        "k_5": {
+          "recall": {
+            "mean": 0.978,
+            "min": 0.2,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 5.269608249964222,
+            "p50_ms": 5.3681475001212675,
+            "p99_ms": 6.550035189511618
+          }
+        },
+        "k_10": {
+          "recall": {
+            "mean": 0.982,
+            "min": 0.5,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 5.258784830039076,
+            "p50_ms": 5.3299850001167215,
+            "p99_ms": 7.053532070140136
+          }
+        },
+        "k_50": {
+          "recall": {
+            "mean": 0.9638,
+            "min": 0.72,
+            "max": 1.0
+          },
+          "latency": {
+            "mean_ms": 5.244379440064222,
+            "p50_ms": 5.257661000086955,
+            "p99_ms": 6.908986699845627
+          }
+        }
+      }
+    }
+  },
+  "experiment": {
+    "name": "release-0.3.0",
+    "session": "20261103T213500Z",
+    "round": 3,
+    "arm": "govec-0.2.1",
+    "position": 5
+  }
+}

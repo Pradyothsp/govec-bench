@@ -1,0 +1,326 @@
+{"kind": "step", "text": "checking Docker", "t": 1793741701.0479524}
+{"kind": "step", "text": "getting govec's image (ghcr.io/pradyothsp/govec:0.3.0)", "t": 1793741701.0817082}
+{"kind": "step", "text": "getting govec-scalar's image (ghcr.io/pradyothsp/govec:0.3.0)", "t": 1793741701.0819016}
+{"kind": "step", "text": "getting govec-mmap's image (ghcr.io/pradyothsp/govec:0.3.0)", "t": 1793741701.0819519}
+{"kind": "step", "text": "getting govec-0.2.1's image (ghcr.io/pradyothsp/govec:0.2.1)", "t": 1793741701.0819926}
+{"kind": "step", "text": "getting govec-mmap-0.2.1's image (ghcr.io/pradyothsp/govec:0.2.1)", "t": 1793741701.0820303}
+{"kind": "step", "text": "building the workload", "t": 1793741701.0820727}
+{"kind": "round", "round": 1, "t": 1793741704.6144373}
+{"kind": "arm", "round": 1, "arm": "govec", "position": 0, "t": 1793741704.614639}
+{"kind": "stage", "round": 1, "arm": "govec", "text": "loaded index", "t": 1793741712.8622978}
+{"kind": "step", "round": 1, "arm": "govec", "text": "baseline footprint", "t": 1793741713.4044533}
+{"kind": "step", "round": 1, "arm": "govec", "text": "batch insert", "t": 1793741717.6743238}
+{"kind": "step", "round": 1, "arm": "govec", "text": "settle", "t": 1793741792.8954706}
+{"kind": "step", "round": 1, "arm": "govec", "text": "save", "t": 1793741792.896907}
+{"kind": "step", "round": 1, "arm": "govec", "text": "disk and RAM (RAM sampled for 60 s)", "t": 1793741796.1796577}
+{"kind": "step", "round": 1, "arm": "govec", "text": "recall and query latency", "t": 1793741860.4415176}
+{"kind": "step", "round": 1, "arm": "govec", "text": "recall and query latency over gRPC", "t": 1793741862.0623932}
+{"kind": "step", "round": 1, "arm": "govec", "text": "5 restarts with the data loaded", "t": 1793741863.5019243}
+{"kind": "stage", "round": 1, "arm": "govec", "text": "empty", "t": 1793741889.48571}
+{"kind": "step", "round": 1, "arm": "govec", "text": "5 restarts empty", "t": 1793741889.8574388}
+{"kind": "stage", "round": 1, "arm": "govec", "text": "single inserts", "t": 1793741891.7348151}
+{"kind": "step", "round": 1, "arm": "govec", "text": "one-at-a-time inserts, 10k", "t": 1793741892.0757961}
+{"kind": "result", "round": 1, "arm": "govec", "status": "done", "file": "r1-govec.json", "t": 1793741907.9718957}
+{"kind": "arm", "round": 1, "arm": "govec-scalar", "position": 1, "t": 1793741907.971988}
+{"kind": "stage", "round": 1, "arm": "govec-scalar", "text": "loaded index", "t": 1793741908.208014}
+{"kind": "step", "round": 1, "arm": "govec-scalar", "text": "baseline footprint", "t": 1793741908.5937743}
+{"kind": "step", "round": 1, "arm": "govec-scalar", "text": "batch insert", "t": 1793741912.8538206}
+{"kind": "step", "round": 1, "arm": "govec-scalar", "text": "settle", "t": 1793742056.9143314}
+{"kind": "step", "round": 1, "arm": "govec-scalar", "text": "save", "t": 1793742056.9163187}
+{"kind": "step", "round": 1, "arm": "govec-scalar", "text": "disk and RAM (RAM sampled for 60 s)", "t": 1793742057.988356}
+{"kind": "step", "round": 1, "arm": "govec-scalar", "text": "recall and query latency", "t": 1793742122.2730787}
+{"kind": "step", "round": 1, "arm": "govec-scalar", "text": "recall and query latency over gRPC", "t": 1793742125.2159617}
+{"kind": "step", "round": 1, "arm": "govec-scalar", "text": "5 restarts with the data loaded", "t": 1793742127.688606}
+{"kind": "stage", "round": 1, "arm": "govec-scalar", "text": "empty", "t": 1793742138.4098105}
+{"kind": "step", "round": 1, "arm": "govec-scalar", "text": "5 restarts empty", "t": 1793742138.7872772}
+{"kind": "stage", "round": 1, "arm": "govec-scalar", "text": "single inserts", "t": 1793742140.8030987}
+{"kind": "step", "round": 1, "arm": "govec-scalar", "text": "one-at-a-time inserts, 10k", "t": 1793742141.174157}
+{"kind": "result", "round": 1, "arm": "govec-scalar", "status": "done", "file": "r1-govec-scalar.json", "t": 1793742168.990788}
+{"kind": "arm", "round": 1, "arm": "govec-mmap", "position": 2, "t": 1793742168.990915}
+{"kind": "stage", "round": 1, "arm": "govec-mmap", "text": "loaded index", "t": 1793742169.2515514}
+{"kind": "step", "round": 1, "arm": "govec-mmap", "text": "baseline footprint", "t": 1793742169.6704466}
+{"kind": "step", "round": 1, "arm": "govec-mmap", "text": "batch insert", "t": 1793742173.9636955}
+{"kind": "step", "round": 1, "arm": "govec-mmap", "text": "settle", "t": 1793742258.1410859}
+{"kind": "step", "round": 1, "arm": "govec-mmap", "text": "save", "t": 1793742258.1427045}
+{"kind": "step", "round": 1, "arm": "govec-mmap", "text": "disk and RAM (RAM sampled for 60 s)", "t": 1793742258.9820511}
+{"kind": "step", "round": 1, "arm": "govec-mmap", "text": "recall and query latency", "t": 1793742323.265926}
+{"kind": "step", "round": 1, "arm": "govec-mmap", "text": "recall and query latency over gRPC", "t": 1793742324.8168247}
+{"kind": "step", "round": 1, "arm": "govec-mmap", "text": "5 restarts with the data loaded", "t": 1793742326.2097933}
+{"kind": "stage", "round": 1, "arm": "govec-mmap", "text": "empty", "t": 1793742331.3832123}
+{"kind": "step", "round": 1, "arm": "govec-mmap", "text": "5 restarts empty", "t": 1793742331.7345939}
+{"kind": "stage", "round": 1, "arm": "govec-mmap", "text": "single inserts", "t": 1793742333.5766988}
+{"kind": "step", "round": 1, "arm": "govec-mmap", "text": "one-at-a-time inserts, 10k", "t": 1793742333.933475}
+{"kind": "result", "round": 1, "arm": "govec-mmap", "status": "done", "file": "r1-govec-mmap.json", "t": 1793742350.09098}
+{"kind": "arm", "round": 1, "arm": "chroma", "position": 3, "t": 1793742350.09107}
+{"kind": "stage", "round": 1, "arm": "chroma", "text": "loaded index", "t": 1793742350.3325734}
+{"kind": "step", "round": 1, "arm": "chroma", "text": "baseline footprint", "t": 1793742358.069279}
+{"kind": "step", "round": 1, "arm": "chroma", "text": "batch insert", "t": 1793742362.1888247}
+{"kind": "step", "round": 1, "arm": "chroma", "text": "settle", "t": 1793742427.9965801}
+{"kind": "step", "round": 1, "arm": "chroma", "text": "save", "t": 1793742428.003006}
+{"kind": "step", "round": 1, "arm": "chroma", "text": "disk and RAM (RAM sampled for 60 s)", "t": 1793742428.0030944}
+{"kind": "step", "round": 1, "arm": "chroma", "text": "recall and query latency", "t": 1793742492.1276364}
+{"kind": "step", "round": 1, "arm": "chroma", "text": "recall and query latency over gRPC", "t": 1793742493.2811785}
+{"kind": "step", "round": 1, "arm": "chroma", "text": "5 restarts with the data loaded", "t": 1793742493.281297}
+{"kind": "stage", "round": 1, "arm": "chroma", "text": "empty", "t": 1793742496.914072}
+{"kind": "step", "round": 1, "arm": "chroma", "text": "5 restarts empty", "t": 1793742497.2943282}
+{"kind": "stage", "round": 1, "arm": "chroma", "text": "single inserts", "t": 1793742499.2267883}
+{"kind": "step", "round": 1, "arm": "chroma", "text": "one-at-a-time inserts, 10k", "t": 1793742499.6088722}
+{"kind": "result", "round": 1, "arm": "chroma", "status": "done", "file": "r1-chroma.json", "t": 1793742583.056728}
+{"kind": "arm", "round": 1, "arm": "qdrant", "position": 4, "t": 1793742583.0569115}
+{"kind": "stage", "round": 1, "arm": "qdrant", "text": "loaded index", "t": 1793742583.3017602}
+{"kind": "step", "round": 1, "arm": "qdrant", "text": "baseline footprint", "t": 1793742586.9138122}
+{"kind": "step", "round": 1, "arm": "qdrant", "text": "batch insert", "t": 1793742591.038388}
+{"kind": "step", "round": 1, "arm": "qdrant", "text": "settle", "t": 1793742712.5436609}
+{"kind": "step", "round": 1, "arm": "qdrant", "text": "save", "t": 1793742713.5194347}
+{"kind": "step", "round": 1, "arm": "qdrant", "text": "disk and RAM (RAM sampled for 60 s)", "t": 1793742713.5195825}
+{"kind": "step", "round": 1, "arm": "qdrant", "text": "recall and query latency", "t": 1793742780.7726014}
+{"kind": "step", "round": 1, "arm": "qdrant", "text": "recall and query latency over gRPC", "t": 1793742782.190712}
+{"kind": "step", "round": 1, "arm": "qdrant", "text": "5 restarts with the data loaded", "t": 1793742783.248988}
+{"kind": "stage", "round": 1, "arm": "qdrant", "text": "empty", "t": 1793742785.8533046}
+{"kind": "step", "round": 1, "arm": "qdrant", "text": "5 restarts empty", "t": 1793742786.219632}
+{"kind": "stage", "round": 1, "arm": "qdrant", "text": "single inserts", "t": 1793742788.1150155}
+{"kind": "step", "round": 1, "arm": "qdrant", "text": "one-at-a-time inserts, 10k", "t": 1793742788.469574}
+{"kind": "result", "round": 1, "arm": "qdrant", "status": "done", "file": "r1-qdrant.json", "t": 1793742833.479688}
+{"kind": "arm", "round": 1, "arm": "govec-0.2.1", "position": 5, "t": 1793742833.479796}
+{"kind": "stage", "round": 1, "arm": "govec-0.2.1", "text": "loaded index", "t": 1793742833.7452917}
+{"kind": "step", "round": 1, "arm": "govec-0.2.1", "text": "baseline footprint", "t": 1793742836.0526578}
+{"kind": "step", "round": 1, "arm": "govec-0.2.1", "text": "batch insert", "t": 1793742840.317158}
+{"kind": "step", "round": 1, "arm": "govec-0.2.1", "text": "settle", "t": 1793742983.669805}
+{"kind": "step", "round": 1, "arm": "govec-0.2.1", "text": "save", "t": 1793742983.6714413}
+{"kind": "step", "round": 1, "arm": "govec-0.2.1", "text": "disk and RAM (RAM sampled for 60 s)", "t": 1793742987.1780264}
+{"kind": "step", "round": 1, "arm": "govec-0.2.1", "text": "recall and query latency", "t": 1793743051.4390082}
+{"kind": "step", "round": 1, "arm": "govec-0.2.1", "text": "recall and query latency over gRPC", "t": 1793743054.4001179}
+{"kind": "step", "round": 1, "arm": "govec-0.2.1", "text": "5 restarts with the data loaded", "t": 1793743057.0408585}
+{"kind": "stage", "round": 1, "arm": "govec-0.2.1", "text": "empty", "t": 1793743085.635072}
+{"kind": "step", "round": 1, "arm": "govec-0.2.1", "text": "5 restarts empty", "t": 1793743085.9788792}
+{"kind": "stage", "round": 1, "arm": "govec-0.2.1", "text": "single inserts", "t": 1793743087.7548778}
+{"kind": "step", "round": 1, "arm": "govec-0.2.1", "text": "one-at-a-time inserts, 10k", "t": 1793743088.1023989}
+{"kind": "result", "round": 1, "arm": "govec-0.2.1", "status": "done", "file": "r1-govec-0.2.1.json", "t": 1793743111.9839847}
+{"kind": "arm", "round": 1, "arm": "govec-mmap-0.2.1", "position": 6, "t": 1793743111.984069}
+{"kind": "stage", "round": 1, "arm": "govec-mmap-0.2.1", "text": "loaded index", "t": 1793743112.2313378}
+{"kind": "step", "round": 1, "arm": "govec-mmap-0.2.1", "text": "baseline footprint", "t": 1793743112.6350768}
+{"kind": "step", "round": 1, "arm": "govec-mmap-0.2.1", "text": "batch insert", "t": 1793743116.9011986}
+{"kind": "step", "round": 1, "arm": "govec-mmap-0.2.1", "text": "settle", "t": 1793743258.9268048}
+{"kind": "step", "round": 1, "arm": "govec-mmap-0.2.1", "text": "save", "t": 1793743258.9282782}
+{"kind": "step", "round": 1, "arm": "govec-mmap-0.2.1", "text": "disk and RAM (RAM sampled for 60 s)", "t": 1793743259.2777584}
+{"kind": "step", "round": 1, "arm": "govec-mmap-0.2.1", "text": "recall and query latency", "t": 1793743323.5504632}
+{"kind": "step", "round": 1, "arm": "govec-mmap-0.2.1", "text": "recall and query latency over gRPC", "t": 1793743326.0234325}
+{"kind": "step", "round": 1, "arm": "govec-mmap-0.2.1", "text": "5 restarts with the data loaded", "t": 1793743328.266928}
+{"kind": "stage", "round": 1, "arm": "govec-mmap-0.2.1", "text": "empty", "t": 1793743333.834072}
+{"kind": "step", "round": 1, "arm": "govec-mmap-0.2.1", "text": "5 restarts empty", "t": 1793743334.1720142}
+{"kind": "stage", "round": 1, "arm": "govec-mmap-0.2.1", "text": "single inserts", "t": 1793743336.0238118}
+{"kind": "step", "round": 1, "arm": "govec-mmap-0.2.1", "text": "one-at-a-time inserts, 10k", "t": 1793743336.3652606}
+{"kind": "result", "round": 1, "arm": "govec-mmap-0.2.1", "status": "done", "file": "r1-govec-mmap-0.2.1.json", "t": 1793743359.6087303}
+{"kind": "round", "round": 2, "t": 1793743359.6088178}
+{"kind": "arm", "round": 2, "arm": "govec-mmap-0.2.1", "position": 0, "t": 1793743359.6088822}
+{"kind": "stage", "round": 2, "arm": "govec-mmap-0.2.1", "text": "loaded index", "t": 1793743359.858544}
+{"kind": "step", "round": 2, "arm": "govec-mmap-0.2.1", "text": "baseline footprint", "t": 1793743360.2728262}
+{"kind": "step", "round": 2, "arm": "govec-mmap-0.2.1", "text": "batch insert", "t": 1793743364.541783}
+{"kind": "step", "round": 2, "arm": "govec-mmap-0.2.1", "text": "settle", "t": 1793743506.7488515}
+{"kind": "step", "round": 2, "arm": "govec-mmap-0.2.1", "text": "save", "t": 1793743506.7505412}
+{"kind": "step", "round": 2, "arm": "govec-mmap-0.2.1", "text": "disk and RAM (RAM sampled for 60 s)", "t": 1793743507.4402046}
+{"kind": "step", "round": 2, "arm": "govec-mmap-0.2.1", "text": "recall and query latency", "t": 1793743571.7194583}
+{"kind": "step", "round": 2, "arm": "govec-mmap-0.2.1", "text": "recall and query latency over gRPC", "t": 1793743574.3792548}
+{"kind": "step", "round": 2, "arm": "govec-mmap-0.2.1", "text": "5 restarts with the data loaded", "t": 1793743576.817238}
+{"kind": "stage", "round": 2, "arm": "govec-mmap-0.2.1", "text": "empty", "t": 1793743582.6921105}
+{"kind": "step", "round": 2, "arm": "govec-mmap-0.2.1", "text": "5 restarts empty", "t": 1793743583.0547583}
+{"kind": "stage", "round": 2, "arm": "govec-mmap-0.2.1", "text": "single inserts", "t": 1793743584.7652476}
+{"kind": "step", "round": 2, "arm": "govec-mmap-0.2.1", "text": "one-at-a-time inserts, 10k", "t": 1793743585.11125}
+{"kind": "result", "round": 2, "arm": "govec-mmap-0.2.1", "status": "done", "file": "r2-govec-mmap-0.2.1.json", "t": 1793743609.1696255}
+{"kind": "arm", "round": 2, "arm": "govec-0.2.1", "position": 1, "t": 1793743609.1697605}
+{"kind": "stage", "round": 2, "arm": "govec-0.2.1", "text": "loaded index", "t": 1793743609.4150848}
+{"kind": "step", "round": 2, "arm": "govec-0.2.1", "text": "baseline footprint", "t": 1793743609.813991}
+{"kind": "step", "round": 2, "arm": "govec-0.2.1", "text": "batch insert", "t": 1793743614.0863483}
+{"kind": "step", "round": 2, "arm": "govec-0.2.1", "text": "settle", "t": 1793743756.7570527}
+{"kind": "step", "round": 2, "arm": "govec-0.2.1", "text": "save", "t": 1793743756.75873}
+{"kind": "step", "round": 2, "arm": "govec-0.2.1", "text": "disk and RAM (RAM sampled for 60 s)", "t": 1793743760.0226636}
+{"kind": "step", "round": 2, "arm": "govec-0.2.1", "text": "recall and query latency", "t": 1793743824.2971165}
+{"kind": "step", "round": 2, "arm": "govec-0.2.1", "text": "recall and query latency over gRPC", "t": 1793743827.0761304}
+{"kind": "step", "round": 2, "arm": "govec-0.2.1", "text": "5 restarts with the data loaded", "t": 1793743829.6139288}
+{"kind": "stage", "round": 2, "arm": "govec-0.2.1", "text": "empty", "t": 1793743857.1340144}
+{"kind": "step", "round": 2, "arm": "govec-0.2.1", "text": "5 restarts empty", "t": 1793743857.489106}
+{"kind": "stage", "round": 2, "arm": "govec-0.2.1", "text": "single inserts", "t": 1793743859.309358}
+{"kind": "step", "round": 2, "arm": "govec-0.2.1", "text": "one-at-a-time inserts, 10k", "t": 1793743859.6976604}
+{"kind": "result", "round": 2, "arm": "govec-0.2.1", "status": "done", "file": "r2-govec-0.2.1.json", "t": 1793743884.8738716}
+{"kind": "arm", "round": 2, "arm": "qdrant", "position": 2, "t": 1793743884.8739936}
+{"kind": "stage", "round": 2, "arm": "qdrant", "text": "loaded index", "t": 1793743885.1209261}
+{"kind": "step", "round": 2, "arm": "qdrant", "text": "baseline footprint", "t": 1793743885.5404122}
+{"kind": "step", "round": 2, "arm": "qdrant", "text": "batch insert", "t": 1793743889.6703627}
+{"kind": "step", "round": 2, "arm": "qdrant", "text": "settle", "t": 1793744008.5490942}
+{"kind": "step", "round": 2, "arm": "qdrant", "text": "save", "t": 1793744010.2429323}
+{"kind": "step", "round": 2, "arm": "qdrant", "text": "disk and RAM (RAM sampled for 60 s)", "t": 1793744010.243067}
+{"kind": "step", "round": 2, "arm": "qdrant", "text": "recall and query latency", "t": 1793744080.4591625}
+{"kind": "step", "round": 2, "arm": "qdrant", "text": "recall and query latency over gRPC", "t": 1793744082.7291484}
+{"kind": "step", "round": 2, "arm": "qdrant", "text": "5 restarts with the data loaded", "t": 1793744083.7022614}
+{"kind": "stage", "round": 2, "arm": "qdrant", "text": "empty", "t": 1793744086.4111552}
+{"kind": "step", "round": 2, "arm": "qdrant", "text": "5 restarts empty", "t": 1793744086.779051}
+{"kind": "stage", "round": 2, "arm": "qdrant", "text": "single inserts", "t": 1793744088.6882463}
+{"kind": "step", "round": 2, "arm": "qdrant", "text": "one-at-a-time inserts, 10k", "t": 1793744089.0646126}
+{"kind": "result", "round": 2, "arm": "qdrant", "status": "done", "file": "r2-qdrant.json", "t": 1793744140.844712}
+{"kind": "arm", "round": 2, "arm": "chroma", "position": 3, "t": 1793744140.8448422}
+{"kind": "stage", "round": 2, "arm": "chroma", "text": "loaded index", "t": 1793744141.1281557}
+{"kind": "step", "round": 2, "arm": "chroma", "text": "baseline footprint", "t": 1793744141.5651093}
+{"kind": "step", "round": 2, "arm": "chroma", "text": "batch insert", "t": 1793744145.691175}
+{"kind": "step", "round": 2, "arm": "chroma", "text": "settle", "t": 1793744211.1387877}
+{"kind": "step", "round": 2, "arm": "chroma", "text": "save", "t": 1793744211.1453092}
+{"kind": "step", "round": 2, "arm": "chroma", "text": "disk and RAM (RAM sampled for 60 s)", "t": 1793744211.1453924}
+{"kind": "step", "round": 2, "arm": "chroma", "text": "recall and query latency", "t": 1793744275.2719038}
+{"kind": "step", "round": 2, "arm": "chroma", "text": "recall and query latency over gRPC", "t": 1793744276.440266}
+{"kind": "step", "round": 2, "arm": "chroma", "text": "5 restarts with the data loaded", "t": 1793744276.4403963}
+{"kind": "stage", "round": 2, "arm": "chroma", "text": "empty", "t": 1793744280.1464803}
+{"kind": "step", "round": 2, "arm": "chroma", "text": "5 restarts empty", "t": 1793744280.5398498}
+{"kind": "stage", "round": 2, "arm": "chroma", "text": "single inserts", "t": 1793744282.5160892}
+{"kind": "step", "round": 2, "arm": "chroma", "text": "one-at-a-time inserts, 10k", "t": 1793744282.9047256}
+{"kind": "result", "round": 2, "arm": "chroma", "status": "done", "file": "r2-chroma.json", "t": 1793744367.8118613}
+{"kind": "arm", "round": 2, "arm": "govec-mmap", "position": 4, "t": 1793744367.811957}
+{"kind": "stage", "round": 2, "arm": "govec-mmap", "text": "loaded index", "t": 1793744368.0475461}
+{"kind": "step", "round": 2, "arm": "govec-mmap", "text": "baseline footprint", "t": 1793744368.4257393}
+{"kind": "step", "round": 2, "arm": "govec-mmap", "text": "batch insert", "t": 1793744372.7002738}
+{"kind": "step", "round": 2, "arm": "govec-mmap", "text": "settle", "t": 1793744450.8278587}
+{"kind": "step", "round": 2, "arm": "govec-mmap", "text": "save", "t": 1793744450.829421}
+{"kind": "step", "round": 2, "arm": "govec-mmap", "text": "disk and RAM (RAM sampled for 60 s)", "t": 1793744451.7401497}
+{"kind": "step", "round": 2, "arm": "govec-mmap", "text": "recall and query latency", "t": 1793744516.0042112}
+{"kind": "step", "round": 2, "arm": "govec-mmap", "text": "recall and query latency over gRPC", "t": 1793744517.54284}
+{"kind": "step", "round": 2, "arm": "govec-mmap", "text": "5 restarts with the data loaded", "t": 1793744518.8787348}
+{"kind": "stage", "round": 2, "arm": "govec-mmap", "text": "empty", "t": 1793744524.2810156}
+{"kind": "step", "round": 2, "arm": "govec-mmap", "text": "5 restarts empty", "t": 1793744524.6253643}
+{"kind": "stage", "round": 2, "arm": "govec-mmap", "text": "single inserts", "t": 1793744526.4419875}
+{"kind": "step", "round": 2, "arm": "govec-mmap", "text": "one-at-a-time inserts, 10k", "t": 1793744526.7835786}
+{"kind": "result", "round": 2, "arm": "govec-mmap", "status": "done", "file": "r2-govec-mmap.json", "t": 1793744545.4219325}
+{"kind": "arm", "round": 2, "arm": "govec-scalar", "position": 5, "t": 1793744545.422028}
+{"kind": "stage", "round": 2, "arm": "govec-scalar", "text": "loaded index", "t": 1793744545.6911287}
+{"kind": "step", "round": 2, "arm": "govec-scalar", "text": "baseline footprint", "t": 1793744546.0792193}
+{"kind": "step", "round": 2, "arm": "govec-scalar", "text": "batch insert", "t": 1793744550.3411095}
+{"kind": "step", "round": 2, "arm": "govec-scalar", "text": "settle", "t": 1793744692.764745}
+{"kind": "step", "round": 2, "arm": "govec-scalar", "text": "save", "t": 1793744692.7663968}
+{"kind": "step", "round": 2, "arm": "govec-scalar", "text": "disk and RAM (RAM sampled for 60 s)", "t": 1793744693.6565335}
+{"kind": "step", "round": 2, "arm": "govec-scalar", "text": "recall and query latency", "t": 1793744757.9198542}
+{"kind": "step", "round": 2, "arm": "govec-scalar", "text": "recall and query latency over gRPC", "t": 1793744760.3184555}
+{"kind": "step", "round": 2, "arm": "govec-scalar", "text": "5 restarts with the data loaded", "t": 1793744762.5209305}
+{"kind": "stage", "round": 2, "arm": "govec-scalar", "text": "empty", "t": 1793744772.4574149}
+{"kind": "step", "round": 2, "arm": "govec-scalar", "text": "5 restarts empty", "t": 1793744772.8015647}
+{"kind": "stage", "round": 2, "arm": "govec-scalar", "text": "single inserts", "t": 1793744774.661125}
+{"kind": "step", "round": 2, "arm": "govec-scalar", "text": "one-at-a-time inserts, 10k", "t": 1793744775.0051348}
+{"kind": "result", "round": 2, "arm": "govec-scalar", "status": "done", "file": "r2-govec-scalar.json", "t": 1793744799.286855}
+{"kind": "arm", "round": 2, "arm": "govec", "position": 6, "t": 1793744799.2869565}
+{"kind": "stage", "round": 2, "arm": "govec", "text": "loaded index", "t": 1793744799.5291994}
+{"kind": "step", "round": 2, "arm": "govec", "text": "baseline footprint", "t": 1793744799.917635}
+{"kind": "step", "round": 2, "arm": "govec", "text": "batch insert", "t": 1793744804.1975155}
+{"kind": "step", "round": 2, "arm": "govec", "text": "settle", "t": 1793744878.2243853}
+{"kind": "step", "round": 2, "arm": "govec", "text": "save", "t": 1793744878.225724}
+{"kind": "step", "round": 2, "arm": "govec", "text": "disk and RAM (RAM sampled for 60 s)", "t": 1793744880.9345706}
+{"kind": "step", "round": 2, "arm": "govec", "text": "recall and query latency", "t": 1793744945.2051165}
+{"kind": "step", "round": 2, "arm": "govec", "text": "recall and query latency over gRPC", "t": 1793744946.7584772}
+{"kind": "step", "round": 2, "arm": "govec", "text": "5 restarts with the data loaded", "t": 1793744948.1021798}
+{"kind": "stage", "round": 2, "arm": "govec", "text": "empty", "t": 1793744970.5119905}
+{"kind": "step", "round": 2, "arm": "govec", "text": "5 restarts empty", "t": 1793744970.8568761}
+{"kind": "stage", "round": 2, "arm": "govec", "text": "single inserts", "t": 1793744972.621319}
+{"kind": "step", "round": 2, "arm": "govec", "text": "one-at-a-time inserts, 10k", "t": 1793744972.9671617}
+{"kind": "result", "round": 2, "arm": "govec", "status": "done", "file": "r2-govec.json", "t": 1793744988.7394953}
+{"kind": "round", "round": 3, "t": 1793744988.7395868}
+{"kind": "arm", "round": 3, "arm": "govec", "position": 0, "t": 1793744988.7396624}
+{"kind": "stage", "round": 3, "arm": "govec", "text": "loaded index", "t": 1793744988.9746616}
+{"kind": "step", "round": 3, "arm": "govec", "text": "baseline footprint", "t": 1793744989.3719962}
+{"kind": "step", "round": 3, "arm": "govec", "text": "batch insert", "t": 1793744993.6399777}
+{"kind": "step", "round": 3, "arm": "govec", "text": "settle", "t": 1793745068.7280486}
+{"kind": "step", "round": 3, "arm": "govec", "text": "save", "t": 1793745068.729347}
+{"kind": "step", "round": 3, "arm": "govec", "text": "disk and RAM (RAM sampled for 60 s)", "t": 1793745071.3908646}
+{"kind": "step", "round": 3, "arm": "govec", "text": "recall and query latency", "t": 1793745135.657245}
+{"kind": "step", "round": 3, "arm": "govec", "text": "recall and query latency over gRPC", "t": 1793745137.2922568}
+{"kind": "step", "round": 3, "arm": "govec", "text": "5 restarts with the data loaded", "t": 1793745138.6632688}
+{"kind": "stage", "round": 3, "arm": "govec", "text": "empty", "t": 1793745161.086151}
+{"kind": "step", "round": 3, "arm": "govec", "text": "5 restarts empty", "t": 1793745161.4544296}
+{"kind": "stage", "round": 3, "arm": "govec", "text": "single inserts", "t": 1793745163.2681887}
+{"kind": "step", "round": 3, "arm": "govec", "text": "one-at-a-time inserts, 10k", "t": 1793745163.6292124}
+{"kind": "result", "round": 3, "arm": "govec", "status": "done", "file": "r3-govec.json", "t": 1793745180.205393}
+{"kind": "arm", "round": 3, "arm": "govec-scalar", "position": 1, "t": 1793745180.2055023}
+{"kind": "stage", "round": 3, "arm": "govec-scalar", "text": "loaded index", "t": 1793745180.4836104}
+{"kind": "step", "round": 3, "arm": "govec-scalar", "text": "baseline footprint", "t": 1793745180.9017143}
+{"kind": "step", "round": 3, "arm": "govec-scalar", "text": "batch insert", "t": 1793745185.1865706}
+{"kind": "step", "round": 3, "arm": "govec-scalar", "text": "settle", "t": 1793745329.9882495}
+{"kind": "step", "round": 3, "arm": "govec-scalar", "text": "save", "t": 1793745329.989966}
+{"kind": "step", "round": 3, "arm": "govec-scalar", "text": "disk and RAM (RAM sampled for 60 s)", "t": 1793745330.904174}
+{"kind": "step", "round": 3, "arm": "govec-scalar", "text": "recall and query latency", "t": 1793745395.1731348}
+{"kind": "step", "round": 3, "arm": "govec-scalar", "text": "recall and query latency over gRPC", "t": 1793745397.541163}
+{"kind": "step", "round": 3, "arm": "govec-scalar", "text": "5 restarts with the data loaded", "t": 1793745399.765671}
+{"kind": "stage", "round": 3, "arm": "govec-scalar", "text": "empty", "t": 1793745409.816361}
+{"kind": "step", "round": 3, "arm": "govec-scalar", "text": "5 restarts empty", "t": 1793745410.1793177}
+{"kind": "stage", "round": 3, "arm": "govec-scalar", "text": "single inserts", "t": 1793745411.942683}
+{"kind": "step", "round": 3, "arm": "govec-scalar", "text": "one-at-a-time inserts, 10k", "t": 1793745412.2917955}
+{"kind": "result", "round": 3, "arm": "govec-scalar", "status": "done", "file": "r3-govec-scalar.json", "t": 1793745436.81594}
+{"kind": "arm", "round": 3, "arm": "govec-mmap", "position": 2, "t": 1793745436.8160439}
+{"kind": "stage", "round": 3, "arm": "govec-mmap", "text": "loaded index", "t": 1793745437.0573819}
+{"kind": "step", "round": 3, "arm": "govec-mmap", "text": "baseline footprint", "t": 1793745437.4520838}
+{"kind": "step", "round": 3, "arm": "govec-mmap", "text": "batch insert", "t": 1793745441.7312205}
+{"kind": "step", "round": 3, "arm": "govec-mmap", "text": "settle", "t": 1793745521.986251}
+{"kind": "step", "round": 3, "arm": "govec-mmap", "text": "save", "t": 1793745521.9877155}
+{"kind": "step", "round": 3, "arm": "govec-mmap", "text": "disk and RAM (RAM sampled for 60 s)", "t": 1793745522.8436959}
+{"kind": "step", "round": 3, "arm": "govec-mmap", "text": "recall and query latency", "t": 1793745587.130701}
+{"kind": "step", "round": 3, "arm": "govec-mmap", "text": "recall and query latency over gRPC", "t": 1793745588.8581717}
+{"kind": "step", "round": 3, "arm": "govec-mmap", "text": "5 restarts with the data loaded", "t": 1793745590.7002544}
+{"kind": "stage", "round": 3, "arm": "govec-mmap", "text": "empty", "t": 1793745596.149324}
+{"kind": "step", "round": 3, "arm": "govec-mmap", "text": "5 restarts empty", "t": 1793745596.4934}
+{"kind": "stage", "round": 3, "arm": "govec-mmap", "text": "single inserts", "t": 1793745598.2930007}
+{"kind": "step", "round": 3, "arm": "govec-mmap", "text": "one-at-a-time inserts, 10k", "t": 1793745598.6415286}
+{"kind": "result", "round": 3, "arm": "govec-mmap", "status": "done", "file": "r3-govec-mmap.json", "t": 1793745614.5853777}
+{"kind": "arm", "round": 3, "arm": "chroma", "position": 3, "t": 1793745614.585472}
+{"kind": "stage", "round": 3, "arm": "chroma", "text": "loaded index", "t": 1793745614.8348897}
+{"kind": "step", "round": 3, "arm": "chroma", "text": "baseline footprint", "t": 1793745615.2605574}
+{"kind": "step", "round": 3, "arm": "chroma", "text": "batch insert", "t": 1793745619.3842323}
+{"kind": "step", "round": 3, "arm": "chroma", "text": "settle", "t": 1793745684.184318}
+{"kind": "step", "round": 3, "arm": "chroma", "text": "save", "t": 1793745684.1910043}
+{"kind": "step", "round": 3, "arm": "chroma", "text": "disk and RAM (RAM sampled for 60 s)", "t": 1793745684.1911094}
+{"kind": "step", "round": 3, "arm": "chroma", "text": "recall and query latency", "t": 1793745748.3141418}
+{"kind": "step", "round": 3, "arm": "chroma", "text": "recall and query latency over gRPC", "t": 1793745749.4720287}
+{"kind": "step", "round": 3, "arm": "chroma", "text": "5 restarts with the data loaded", "t": 1793745749.4722214}
+{"kind": "stage", "round": 3, "arm": "chroma", "text": "empty", "t": 1793745753.2512715}
+{"kind": "step", "round": 3, "arm": "chroma", "text": "5 restarts empty", "t": 1793745753.6261394}
+{"kind": "stage", "round": 3, "arm": "chroma", "text": "single inserts", "t": 1793745755.5800722}
+{"kind": "step", "round": 3, "arm": "chroma", "text": "one-at-a-time inserts, 10k", "t": 1793745755.9589164}
+{"kind": "result", "round": 3, "arm": "chroma", "status": "done", "file": "r3-chroma.json", "t": 1793745839.8815544}
+{"kind": "arm", "round": 3, "arm": "qdrant", "position": 4, "t": 1793745839.8816683}
+{"kind": "stage", "round": 3, "arm": "qdrant", "text": "loaded index", "t": 1793745840.124531}
+{"kind": "step", "round": 3, "arm": "qdrant", "text": "baseline footprint", "t": 1793745840.5514371}
+{"kind": "step", "round": 3, "arm": "qdrant", "text": "batch insert", "t": 1793745844.6782305}
+{"kind": "step", "round": 3, "arm": "qdrant", "text": "settle", "t": 1793745954.0926254}
+{"kind": "step", "round": 3, "arm": "qdrant", "text": "save", "t": 1793745956.220239}
+{"kind": "step", "round": 3, "arm": "qdrant", "text": "disk and RAM (RAM sampled for 60 s)", "t": 1793745956.2203593}
+{"kind": "step", "round": 3, "arm": "qdrant", "text": "recall and query latency", "t": 1793746023.3860857}
+{"kind": "step", "round": 3, "arm": "qdrant", "text": "recall and query latency over gRPC", "t": 1793746024.7895606}
+{"kind": "step", "round": 3, "arm": "qdrant", "text": "5 restarts with the data loaded", "t": 1793746025.7552655}
+{"kind": "stage", "round": 3, "arm": "qdrant", "text": "empty", "t": 1793746028.3124957}
+{"kind": "step", "round": 3, "arm": "qdrant", "text": "5 restarts empty", "t": 1793746028.6905537}
+{"kind": "stage", "round": 3, "arm": "qdrant", "text": "single inserts", "t": 1793746030.6259153}
+{"kind": "step", "round": 3, "arm": "qdrant", "text": "one-at-a-time inserts, 10k", "t": 1793746030.9940562}
+{"kind": "result", "round": 3, "arm": "qdrant", "status": "done", "file": "r3-qdrant.json", "t": 1793746077.2742937}
+{"kind": "arm", "round": 3, "arm": "govec-0.2.1", "position": 5, "t": 1793746077.2744093}
+{"kind": "stage", "round": 3, "arm": "govec-0.2.1", "text": "loaded index", "t": 1793746077.5519137}
+{"kind": "step", "round": 3, "arm": "govec-0.2.1", "text": "baseline footprint", "t": 1793746077.9469848}
+{"kind": "step", "round": 3, "arm": "govec-0.2.1", "text": "batch insert", "t": 1793746082.2123072}
+{"kind": "step", "round": 3, "arm": "govec-0.2.1", "text": "settle", "t": 1793746223.9064023}
+{"kind": "step", "round": 3, "arm": "govec-0.2.1", "text": "save", "t": 1793746223.9080453}
+{"kind": "step", "round": 3, "arm": "govec-0.2.1", "text": "disk and RAM (RAM sampled for 60 s)", "t": 1793746226.6828196}
+{"kind": "step", "round": 3, "arm": "govec-0.2.1", "text": "recall and query latency", "t": 1793746290.9681041}
+{"kind": "step", "round": 3, "arm": "govec-0.2.1", "text": "recall and query latency over gRPC", "t": 1793746293.6240351}
+{"kind": "step", "round": 3, "arm": "govec-0.2.1", "text": "5 restarts with the data loaded", "t": 1793746296.3732715}
+{"kind": "stage", "round": 3, "arm": "govec-0.2.1", "text": "empty", "t": 1793746320.7288625}
+{"kind": "step", "round": 3, "arm": "govec-0.2.1", "text": "5 restarts empty", "t": 1793746321.085466}
+{"kind": "stage", "round": 3, "arm": "govec-0.2.1", "text": "single inserts", "t": 1793746322.9203362}
+{"kind": "step", "round": 3, "arm": "govec-0.2.1", "text": "one-at-a-time inserts, 10k", "t": 1793746323.2755897}
+{"kind": "result", "round": 3, "arm": "govec-0.2.1", "status": "done", "file": "r3-govec-0.2.1.json", "t": 1793746347.8195167}
+{"kind": "arm", "round": 3, "arm": "govec-mmap-0.2.1", "position": 6, "t": 1793746347.8196037}
+{"kind": "stage", "round": 3, "arm": "govec-mmap-0.2.1", "text": "loaded index", "t": 1793746348.0623317}
+{"kind": "step", "round": 3, "arm": "govec-mmap-0.2.1", "text": "baseline footprint", "t": 1793746348.4494987}
+{"kind": "step", "round": 3, "arm": "govec-mmap-0.2.1", "text": "batch insert", "t": 1793746352.7143514}
+{"kind": "step", "round": 3, "arm": "govec-mmap-0.2.1", "text": "settle", "t": 1793746494.2415915}
+{"kind": "step", "round": 3, "arm": "govec-mmap-0.2.1", "text": "save", "t": 1793746494.2433405}
+{"kind": "step", "round": 3, "arm": "govec-mmap-0.2.1", "text": "disk and RAM (RAM sampled for 60 s)", "t": 1793746494.5695934}
+{"kind": "step", "round": 3, "arm": "govec-mmap-0.2.1", "text": "recall and query latency", "t": 1793746558.8445601}
+{"kind": "step", "round": 3, "arm": "govec-mmap-0.2.1", "text": "recall and query latency over gRPC", "t": 1793746561.4350133}
+{"kind": "step", "round": 3, "arm": "govec-mmap-0.2.1", "text": "5 restarts with the data loaded", "t": 1793746563.7083528}
+{"kind": "stage", "round": 3, "arm": "govec-mmap-0.2.1", "text": "empty", "t": 1793746569.2458293}
+{"kind": "step", "round": 3, "arm": "govec-mmap-0.2.1", "text": "5 restarts empty", "t": 1793746569.5892642}
+{"kind": "stage", "round": 3, "arm": "govec-mmap-0.2.1", "text": "single inserts", "t": 1793746571.335056}
+{"kind": "step", "round": 3, "arm": "govec-mmap-0.2.1", "text": "one-at-a-time inserts, 10k", "t": 1793746571.6813903}
+{"kind": "result", "round": 3, "arm": "govec-mmap-0.2.1", "status": "done", "file": "r3-govec-mmap-0.2.1.json", "t": 1793746595.1084}
+{"kind": "end", "status": "done", "t": 1793746595.1086981}

@@ -1,0 +1,325 @@
+{
+  "experiment": "release-0.3.0",
+  "description": "The README's run for GoVec 0.3.0: every database on its pinned image, three rounds for medians, on DBpedia 100k. GoVec 0.2.1 runs beside it on the heap and memory-mapped, so the same session shows what 0.3.0 changed end to end without comparing across nights.",
+  "session": "20261103T213500Z",
+  "dataset": "dbpedia",
+  "size": "large",
+  "arms": {
+    "govec": {
+      "database": "govec",
+      "govec": "ghcr.io/pradyothsp/govec:0.3.0",
+      "env": {},
+      "memory_bytes": null
+    },
+    "govec-scalar": {
+      "database": "govec-scalar",
+      "govec": "ghcr.io/pradyothsp/govec:0.3.0",
+      "env": {
+        "GOVEC_QUANTIZATION": "scalar"
+      },
+      "memory_bytes": null
+    },
+    "govec-mmap": {
+      "database": "govec-mmap",
+      "govec": "ghcr.io/pradyothsp/govec:0.3.0",
+      "env": {
+        "GOVEC_ENABLE_MMAP": "true"
+      },
+      "memory_bytes": null
+    },
+    "chroma": {
+      "database": "chroma",
+      "govec": null,
+      "env": {},
+      "memory_bytes": null
+    },
+    "qdrant": {
+      "database": "qdrant",
+      "govec": null,
+      "env": {},
+      "memory_bytes": null
+    },
+    "govec-0.2.1": {
+      "database": "govec",
+      "govec": "ghcr.io/pradyothsp/govec:0.2.1",
+      "env": {},
+      "memory_bytes": null
+    },
+    "govec-mmap-0.2.1": {
+      "database": "govec-mmap",
+      "govec": "ghcr.io/pradyothsp/govec:0.2.1",
+      "env": {
+        "GOVEC_ENABLE_MMAP": "true"
+      },
+      "memory_bytes": null
+    }
+  },
+  "steps": [
+    "baseline",
+    "batch-insert",
+    "settle",
+    "save",
+    "memory",
+    "queries",
+    "queries-grpc",
+    "restart-loaded",
+    "restart-empty",
+    "single-insert"
+  ],
+  "plan": [
+    [
+      "govec",
+      "govec-scalar",
+      "govec-mmap",
+      "chroma",
+      "qdrant",
+      "govec-0.2.1",
+      "govec-mmap-0.2.1"
+    ],
+    [
+      "govec-mmap-0.2.1",
+      "govec-0.2.1",
+      "qdrant",
+      "chroma",
+      "govec-mmap",
+      "govec-scalar",
+      "govec"
+    ],
+    [
+      "govec",
+      "govec-scalar",
+      "govec-mmap",
+      "chroma",
+      "qdrant",
+      "govec-0.2.1",
+      "govec-mmap-0.2.1"
+    ]
+  ],
+  "machine": {
+    "platform": "Linux-7.0.0-1019-azure-x86_64-with-glibc2.43",
+    "cpu": "AMD EPYC 9V45 96-Core Processor",
+    "cpus": 4,
+    "memory_bytes": 16759439360,
+    "docker": "29.4.2"
+  },
+  "govec_bench": {
+    "commit": "cf8ea1314d94",
+    "uncommitted": []
+  },
+  "started": "2026-11-03T21:35:01.047756+00:00",
+  "finished": "2026-11-03T22:56:35.108451+00:00",
+  "status": "done",
+  "runs": [
+    {
+      "round": 1,
+      "arm": "govec",
+      "position": 0,
+      "started": "2026-11-03T21:35:04.614614+00:00",
+      "status": "done",
+      "finished": "2026-11-03T21:38:27.971509+00:00",
+      "file": "r1-govec.json",
+      "error": null
+    },
+    {
+      "round": 1,
+      "arm": "govec-scalar",
+      "position": 1,
+      "started": "2026-11-03T21:38:27.971977+00:00",
+      "status": "done",
+      "finished": "2026-11-03T21:42:48.990356+00:00",
+      "file": "r1-govec-scalar.json",
+      "error": null
+    },
+    {
+      "round": 1,
+      "arm": "govec-mmap",
+      "position": 2,
+      "started": "2026-11-03T21:42:48.990902+00:00",
+      "status": "done",
+      "finished": "2026-11-03T21:45:50.090577+00:00",
+      "file": "r1-govec-mmap.json",
+      "error": null
+    },
+    {
+      "round": 1,
+      "arm": "chroma",
+      "position": 3,
+      "started": "2026-11-03T21:45:50.091060+00:00",
+      "status": "done",
+      "finished": "2026-11-03T21:49:43.056337+00:00",
+      "file": "r1-chroma.json",
+      "error": null
+    },
+    {
+      "round": 1,
+      "arm": "qdrant",
+      "position": 4,
+      "started": "2026-11-03T21:49:43.056901+00:00",
+      "status": "done",
+      "finished": "2026-11-03T21:53:53.479298+00:00",
+      "file": "r1-qdrant.json",
+      "error": null
+    },
+    {
+      "round": 1,
+      "arm": "govec-0.2.1",
+      "position": 5,
+      "started": "2026-11-03T21:53:53.479785+00:00",
+      "status": "done",
+      "finished": "2026-11-03T21:58:31.983578+00:00",
+      "file": "r1-govec-0.2.1.json",
+      "error": null
+    },
+    {
+      "round": 1,
+      "arm": "govec-mmap-0.2.1",
+      "position": 6,
+      "started": "2026-11-03T21:58:31.984059+00:00",
+      "status": "done",
+      "finished": "2026-11-03T22:02:39.608295+00:00",
+      "file": "r1-govec-mmap-0.2.1.json",
+      "error": null
+    },
+    {
+      "round": 2,
+      "arm": "govec-mmap-0.2.1",
+      "position": 0,
+      "started": "2026-11-03T22:02:39.608873+00:00",
+      "status": "done",
+      "finished": "2026-11-03T22:06:49.169233+00:00",
+      "file": "r2-govec-mmap-0.2.1.json",
+      "error": null
+    },
+    {
+      "round": 2,
+      "arm": "govec-0.2.1",
+      "position": 1,
+      "started": "2026-11-03T22:06:49.169750+00:00",
+      "status": "done",
+      "finished": "2026-11-03T22:11:24.873412+00:00",
+      "file": "r2-govec-0.2.1.json",
+      "error": null
+    },
+    {
+      "round": 2,
+      "arm": "qdrant",
+      "position": 2,
+      "started": "2026-11-03T22:11:24.873982+00:00",
+      "status": "done",
+      "finished": "2026-11-03T22:15:40.844219+00:00",
+      "file": "r2-qdrant.json",
+      "error": null
+    },
+    {
+      "round": 2,
+      "arm": "chroma",
+      "position": 3,
+      "started": "2026-11-03T22:15:40.844829+00:00",
+      "status": "done",
+      "finished": "2026-11-03T22:19:27.810623+00:00",
+      "file": "r2-chroma.json",
+      "error": null
+    },
+    {
+      "round": 2,
+      "arm": "govec-mmap",
+      "position": 4,
+      "started": "2026-11-03T22:19:27.811950+00:00",
+      "status": "done",
+      "finished": "2026-11-03T22:22:25.421511+00:00",
+      "file": "r2-govec-mmap.json",
+      "error": null
+    },
+    {
+      "round": 2,
+      "arm": "govec-scalar",
+      "position": 5,
+      "started": "2026-11-03T22:22:25.422018+00:00",
+      "status": "done",
+      "finished": "2026-11-03T22:26:39.286413+00:00",
+      "file": "r2-govec-scalar.json",
+      "error": null
+    },
+    {
+      "round": 2,
+      "arm": "govec",
+      "position": 6,
+      "started": "2026-11-03T22:26:39.286945+00:00",
+      "status": "done",
+      "finished": "2026-11-03T22:29:48.739062+00:00",
+      "file": "r2-govec.json",
+      "error": null
+    },
+    {
+      "round": 3,
+      "arm": "govec",
+      "position": 0,
+      "started": "2026-11-03T22:29:48.739640+00:00",
+      "status": "done",
+      "finished": "2026-11-03T22:33:00.204925+00:00",
+      "file": "r3-govec.json",
+      "error": null
+    },
+    {
+      "round": 3,
+      "arm": "govec-scalar",
+      "position": 1,
+      "started": "2026-11-03T22:33:00.205490+00:00",
+      "status": "done",
+      "finished": "2026-11-03T22:37:16.815451+00:00",
+      "file": "r3-govec-scalar.json",
+      "error": null
+    },
+    {
+      "round": 3,
+      "arm": "govec-mmap",
+      "position": 2,
+      "started": "2026-11-03T22:37:16.816033+00:00",
+      "status": "done",
+      "finished": "2026-11-03T22:40:14.584956+00:00",
+      "file": "r3-govec-mmap.json",
+      "error": null
+    },
+    {
+      "round": 3,
+      "arm": "chroma",
+      "position": 3,
+      "started": "2026-11-03T22:40:14.585462+00:00",
+      "status": "done",
+      "finished": "2026-11-03T22:43:59.881115+00:00",
+      "file": "r3-chroma.json",
+      "error": null
+    },
+    {
+      "round": 3,
+      "arm": "qdrant",
+      "position": 4,
+      "started": "2026-11-03T22:43:59.881658+00:00",
+      "status": "done",
+      "finished": "2026-11-03T22:47:57.273771+00:00",
+      "file": "r3-qdrant.json",
+      "error": null
+    },
+    {
+      "round": 3,
+      "arm": "govec-0.2.1",
+      "position": 5,
+      "started": "2026-11-03T22:47:57.274397+00:00",
+      "status": "done",
+      "finished": "2026-11-03T22:52:27.819087+00:00",
+      "file": "r3-govec-0.2.1.json",
+      "error": null
+    },
+    {
+      "round": 3,
+      "arm": "govec-mmap-0.2.1",
+      "position": 6,
+      "started": "2026-11-03T22:52:27.819594+00:00",
+      "status": "done",
+      "finished": "2026-11-03T22:56:35.107987+00:00",
+      "file": "r3-govec-mmap-0.2.1.json",
+      "error": null
+    }
+  ],
+  "pid": 2809
+}
