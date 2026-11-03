@@ -1,0 +1,14 @@
+description: >-
+  GoVec memory-mapped, the published 0.2.1 and 0.3.0 images in one session: what 0.3.0 changed
+  for restarts and RAM with the vectors in the mmap store (0.3.0 adds the random-access hint).
+dataset: dbpedia
+size: large
+rounds: 4
+order: alternate
+arms:
+  - name: v0.2.1
+    database: govec-mmap
+    govec: ghcr.io/pradyothsp/govec:0.2.1
+  - name: v0.3.0
+    database: govec-mmap
+    govec: ghcr.io/pradyothsp/govec:0.3.0

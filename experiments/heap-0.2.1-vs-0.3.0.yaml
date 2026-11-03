@@ -1,0 +1,14 @@
+description: >-
+  GoVec on the heap store, the published 0.2.1 and 0.3.0 images in one session: what the search
+  allocation work, the SIMD dot product and the faster snapshot load changed end to end.
+dataset: dbpedia
+size: large
+rounds: 4
+order: alternate
+arms:
+  - name: v0.2.1
+    database: govec
+    govec: ghcr.io/pradyothsp/govec:0.2.1
+  - name: v0.3.0
+    database: govec
+    govec: ghcr.io/pradyothsp/govec:0.3.0

@@ -7,7 +7,7 @@
 # of the pin, for development comparisons: published numbers come from the pin.
 services:
   govec:
-    image: ghcr.io/pradyothsp/govec:0.2.1
+    image: ghcr.io/pradyothsp/govec:0.3.0
     container_name: govec-bench-govec
     ports:
       - "9697:9697"
