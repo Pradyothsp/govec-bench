@@ -1,0 +1,28 @@
+description: >-
+  The README's run for GoVec 0.3.0: every database on its pinned image, three rounds for medians,
+  on DBpedia 100k. GoVec 0.2.1 runs beside it on the heap and memory-mapped, so the same session
+  shows what 0.3.0 changed end to end without comparing across nights.
+dataset: dbpedia
+size: large
+rounds: 3
+order: alternate
+arms:
+  - name: govec
+    database: govec
+    govec: ghcr.io/pradyothsp/govec:0.3.0
+  - name: govec-scalar
+    database: govec-scalar
+    govec: ghcr.io/pradyothsp/govec:0.3.0
+  - name: govec-mmap
+    database: govec-mmap
+    govec: ghcr.io/pradyothsp/govec:0.3.0
+  - name: chroma
+    database: chroma
+  - name: qdrant
+    database: qdrant
+  - name: govec-0.2.1
+    database: govec
+    govec: ghcr.io/pradyothsp/govec:0.2.1
+  - name: govec-mmap-0.2.1
+    database: govec-mmap
+    govec: ghcr.io/pradyothsp/govec:0.2.1
