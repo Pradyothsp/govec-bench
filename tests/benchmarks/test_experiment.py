@@ -10,6 +10,7 @@ from govec_bench.benchmarks import experiment as experiment_module
 from govec_bench.benchmarks.experiment import (
     Session,
     find_session_folder,
+    lscpu_model_name,
     parse_experiment,
     plan,
     round_order,
@@ -96,6 +97,25 @@ def test_plan__alternate__reverses_every_other_round() -> None:
 
     # Assert
     assert rounds == [["old", "new"], ["new", "old"], ["old", "new"]]
+
+
+@pytest.mark.parametrize(
+    ("lscpu", "expected"),
+    [
+        (
+            "Architecture:  x86_64\nModel name:    AMD EPYC 7763 64-Core Processor\nCPU(s):  4",
+            "AMD EPYC 7763 64-Core Processor",
+        ),
+        ("Architecture:  aarch64\nModel name:    -\nCPU(s):  8", ""),
+        ("", ""),
+    ],
+)
+def test_lscpu_model_name__lscpu_output__the_model_or_empty(lscpu: str, expected: str) -> None:
+    # Act
+    name = lscpu_model_name(lscpu)
+
+    # Assert
+    assert name == expected
 
 
 def test_round_order__shuffle__every_arm_once() -> None:

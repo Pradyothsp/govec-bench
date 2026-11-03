@@ -367,11 +367,38 @@ class Machine:
 def machine() -> Machine:
     return Machine(
         platform=platform.platform(),
-        cpu=_output("sysctl", "-n", "machdep.cpu.brand_string") or platform.processor(),
+        cpu=_cpu_name(),
         cpus=os.cpu_count(),
-        memory_bytes=int(_output("sysctl", "-n", "hw.memsize") or 0) or None,
+        memory_bytes=_memory_bytes(),
         docker=_output("docker", "version", "--format", "{{.Server.Version}}"),
     )
+
+
+def _cpu_name() -> str:
+    # sysctl on macOS, lscpu on Linux (a CI runner), where platform.processor() is empty.
+    return (
+        _output("sysctl", "-n", "machdep.cpu.brand_string")
+        or lscpu_model_name(_output("lscpu"))
+        or platform.processor()
+        or platform.machine()
+    )
+
+
+def lscpu_model_name(lscpu: str) -> str:
+    # lscpu prints "-" for a model it doesn't know, as for an Apple core inside Docker's VM.
+    for line in lscpu.splitlines():
+        key, _, value = line.partition(":")
+        if key.strip() == "Model name" and value.strip() not in {"", "-"}:
+            return value.strip()
+    return ""
+
+
+def _memory_bytes() -> int | None:
+    # Physical memory on macOS and Linux alike.
+    try:
+        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+    except ValueError, OSError:
+        return None
 
 
 @dataclass(frozen=True, slots=True)
