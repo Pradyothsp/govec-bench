@@ -1,0 +1,83 @@
+# Runs an experiment on a GitHub-hosted runner instead of a Mac, started by hand from the Actions
+# tab. All arms run in this one job, on one machine: arms split across jobs would each get a
+# different VM, and the comparison would no longer be like for like. The session folder comes
+# back as an artifact; its session.json records the machine it ran on.
+name: Bench
+
+on:
+  workflow_dispatch:
+    inputs:
+      experiment:
+        description: "An experiment in experiments/, by name"
+        required: true
+        default: release-0.3.0
+      rounds:
+        description: "Rounds to run instead of the file's (blank: the file's)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+# One session at a time: two on the same runner pool would still be separate VMs, but a second
+# started by mistake would double the queue for nothing.
+concurrency:
+  group: bench
+  cancel-in-progress: false
+
+jobs:
+  run:
+    name: Run ${{ inputs.experiment }}
+    runs-on: ubuntu-latest
+    # GitHub stops a hosted job at 6 hours; stop a little before, so the artifact still uploads.
+    timeout-minutes: 345
+    steps:
+      - uses: actions/checkout@v4
+
+      # Qdrant writes ~30 GB of temporary files while it optimizes a 100k load, and the harness
+      # wants 35 GB free inside Docker's disk before a 100k run. The root disk has less than
+      # that; the runner's second disk, at /mnt, has more. Merged into the runner's own
+      # daemon.json, which carries settings of its own.
+      - name: Move Docker's storage to /mnt
+        run: |
+          df -h / /mnt
+          sudo systemctl stop docker docker.socket
+          sudo mkdir -p /mnt/docker
+          if [ -s /etc/docker/daemon.json ]; then current=$(sudo cat /etc/docker/daemon.json); else current='{}'; fi
+          echo "$current" | jq '. + {"data-root": "/mnt/docker"}' | sudo tee /etc/docker/daemon.json
+          sudo systemctl start docker
+          docker info --format 'Docker root: {{.DockerRootDir}}'
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install
+        run: uv sync --all-groups --frozen
+
+      - name: Restore DBpedia
+        id: dbpedia
+        uses: actions/cache@v4
+        with:
+          path: data/raw/dbpedia
+          key: dbpedia-${{ hashFiles('govec_bench/datasets/dbpedia.py') }}
+
+      - name: Download DBpedia
+        if: steps.dbpedia.outputs.cache-hit != 'true'
+        run: uv run python -m scripts.download_datasets --dataset dbpedia
+
+      - name: Run the experiment
+        env:
+          EXPERIMENT: ${{ inputs.experiment }}
+          ROUNDS: ${{ inputs.rounds }}
+        run: uv run python -m govec_bench.cli run "$EXPERIMENT" --plain ${ROUNDS:+--rounds "$ROUNDS"}
+
+      - name: Disk after the run
+        if: always()
+        run: df -h / /mnt
+
+      - name: Upload the session
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: session-${{ inputs.experiment }}-${{ github.run_id }}
+          path: results/sessions/
+          if-no-files-found: warn
