@@ -15,6 +15,13 @@ reproduce the numbers.
 > the comparison below. The SIFT table and the ef sweep weren't re-run: they are from October
 > runs on a Mac, with older GoVec, and say so where they appear. The raw runs behind every figure
 > are in [`results/published/`](results/published/) (this session in `sessions/release-0.3.0/`).
+>
+> `ubuntu-latest` doesn't fix the processor: each session gets whatever VM Azure hands out, and
+> `session.json` records which. A later session on an AMD EPYC 7763 (Zen 3) measured every
+> database 1.5–1.6x slower than on this EPYC 9V45 (Zen 5). So the milliseconds below belong to
+> this machine. Ratios between databases in the same session carry over far better (GoVec's
+> one-client latency over Chroma's: 1.46 here, 1.45 there; over Qdrant's: 1.49 and 1.37), so
+> compare those across sessions, and read a ratio that moves as a change worth explaining.
 
 One database at a time, 2 CPUs and 2 GB each. Every database builds HNSW with `M=16`,
 `ef_construction=100` and searches with ef 100, cosine. What the harness changes from each
@@ -256,16 +263,19 @@ Latency moves between runs by tens of percent, and whole sessions shift together
 in an earlier set of three runs every database's single inserts were 2–9% slower than in the
 published set, and Qdrant's 30% slower, with no change to any image or code path. So the tables
 are medians of three rounds, every database run once per round in an order that reverses each
-round, and they compare databases within the same session, on the same machine. A shared cloud
-runner varies too: in the published session the widest ranges are p99 latencies (GoVec's k=10
-p99 3.58–8.51 ms across its three rounds); most means moved by a few percent, the most about 20%
-(GoVec int8's k=10, 4.65–5.63 ms). `task results:compare SESSION=release-0.3.0` prints each figure's range.
+round, and they compare databases within the same session, on the same machine. Between
+sessions, compare ratios (GoVec's latency over Qdrant's, say), not milliseconds: the runner's
+processor changes from session to session, and with it every database's speed. A shared cloud
+runner varies within a session too: in the published session the widest ranges are p99
+latencies (GoVec's k=10 p99 3.58–8.51 ms across its three rounds); most means moved by a few
+percent, the most about 20% (GoVec int8's k=10, 4.65–5.63 ms).
+`task results:compare SESSION=release-0.3.0` prints each figure's range.
 
 ## Caveats
 
-- **A shared cloud VM.** The DBpedia figures come from a GitHub-hosted runner: 4 vCPUs shared
-  with other tenants, the benchmark client on the same VM as the database (each database capped
-  at 2 CPUs). They compare the databases with each other, not with dedicated production hardware.
+- **A shared cloud VM, its processor not fixed.** The DBpedia figures come from a GitHub-hosted
+  runner, here an AMD EPYC 9V45: 4 vCPUs shared with other tenants, the benchmark client on the
+  same VM as the database (each database capped at 2 CPUs). They compare the databases with each other, not with dedicated production hardware.
   Docker runs natively on Linux there. The older sections ran on a Mac through Docker Desktop,
   which makes `fsync` unusually cheap and flatters every database's write path.
 - **GoVec's RAM is an upper bound.** RSS reflects when Go's garbage collector returns memory, not
