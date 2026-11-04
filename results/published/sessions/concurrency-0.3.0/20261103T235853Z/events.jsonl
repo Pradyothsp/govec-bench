@@ -1,0 +1,70 @@
+{"kind": "step", "text": "checking Docker", "t": 1793750333.246345}
+{"kind": "step", "text": "getting govec's image (ghcr.io/pradyothsp/govec:0.3.0)", "t": 1793750333.2991705}
+{"kind": "step", "text": "building the workload", "t": 1793750333.2993863}
+{"kind": "round", "round": 1, "t": 1793750338.7778075}
+{"kind": "arm", "round": 1, "arm": "govec", "position": 0, "t": 1793750338.7780206}
+{"kind": "stage", "round": 1, "arm": "govec", "text": "loaded index", "t": 1793750342.2594144}
+{"kind": "step", "round": 1, "arm": "govec", "text": "batch insert", "t": 1793750343.071719}
+{"kind": "step", "round": 1, "arm": "govec", "text": "settle", "t": 1793750459.870917}
+{"kind": "step", "round": 1, "arm": "govec", "text": "throughput and latency with concurrent clients", "t": 1793750459.8727953}
+{"kind": "step", "round": 1, "arm": "govec", "text": "throughput and latency with concurrent clients over gRPC", "t": 1793750679.6179764}
+{"kind": "result", "round": 1, "arm": "govec", "status": "done", "file": "r1-govec.json", "t": 1793750900.1089113}
+{"kind": "arm", "round": 1, "arm": "chroma", "position": 1, "t": 1793750900.1090546}
+{"kind": "stage", "round": 1, "arm": "chroma", "text": "loaded index", "t": 1793750900.465892}
+{"kind": "step", "round": 1, "arm": "chroma", "text": "batch insert", "t": 1793750906.5338025}
+{"kind": "step", "round": 1, "arm": "chroma", "text": "settle", "t": 1793750991.2353458}
+{"kind": "step", "round": 1, "arm": "chroma", "text": "throughput and latency with concurrent clients", "t": 1793750991.2462518}
+{"kind": "step", "round": 1, "arm": "chroma", "text": "throughput and latency with concurrent clients over gRPC", "t": 1793751210.582924}
+{"kind": "result", "round": 1, "arm": "chroma", "status": "done", "file": "r1-chroma.json", "t": 1793751211.063086}
+{"kind": "arm", "round": 1, "arm": "qdrant", "position": 2, "t": 1793751211.063223}
+{"kind": "stage", "round": 1, "arm": "qdrant", "text": "loaded index", "t": 1793751211.4193313}
+{"kind": "step", "round": 1, "arm": "qdrant", "text": "batch insert", "t": 1793751215.0010195}
+{"kind": "step", "round": 1, "arm": "qdrant", "text": "settle", "t": 1793751353.3769073}
+{"kind": "step", "round": 1, "arm": "qdrant", "text": "throughput and latency with concurrent clients", "t": 1793751353.3788292}
+{"kind": "step", "round": 1, "arm": "qdrant", "text": "throughput and latency with concurrent clients over gRPC", "t": 1793751573.1631994}
+{"kind": "result", "round": 1, "arm": "qdrant", "status": "done", "file": "r1-qdrant.json", "t": 1793751792.8049235}
+{"kind": "round", "round": 2, "t": 1793751792.8050754}
+{"kind": "arm", "round": 2, "arm": "qdrant", "position": 0, "t": 1793751792.8052218}
+{"kind": "stage", "round": 2, "arm": "qdrant", "text": "loaded index", "t": 1793751793.1632862}
+{"kind": "step", "round": 2, "arm": "qdrant", "text": "batch insert", "t": 1793751793.8080606}
+{"kind": "step", "round": 2, "arm": "qdrant", "text": "settle", "t": 1793751936.653566}
+{"kind": "step", "round": 2, "arm": "qdrant", "text": "throughput and latency with concurrent clients", "t": 1793751936.6556284}
+{"kind": "step", "round": 2, "arm": "qdrant", "text": "throughput and latency with concurrent clients over gRPC", "t": 1793752156.2081668}
+{"kind": "result", "round": 2, "arm": "qdrant", "status": "done", "file": "r2-qdrant.json", "t": 1793752375.7643409}
+{"kind": "arm", "round": 2, "arm": "chroma", "position": 1, "t": 1793752375.7645135}
+{"kind": "stage", "round": 2, "arm": "chroma", "text": "loaded index", "t": 1793752376.128201}
+{"kind": "step", "round": 2, "arm": "chroma", "text": "batch insert", "t": 1793752376.7680357}
+{"kind": "step", "round": 2, "arm": "chroma", "text": "settle", "t": 1793752462.870848}
+{"kind": "step", "round": 2, "arm": "chroma", "text": "throughput and latency with concurrent clients", "t": 1793752462.882072}
+{"kind": "step", "round": 2, "arm": "chroma", "text": "throughput and latency with concurrent clients over gRPC", "t": 1793752682.585409}
+{"kind": "result", "round": 2, "arm": "chroma", "status": "done", "file": "r2-chroma.json", "t": 1793752682.9917033}
+{"kind": "arm", "round": 2, "arm": "govec", "position": 2, "t": 1793752682.991844}
+{"kind": "stage", "round": 2, "arm": "govec", "text": "loaded index", "t": 1793752683.3510802}
+{"kind": "step", "round": 2, "arm": "govec", "text": "batch insert", "t": 1793752683.9757621}
+{"kind": "step", "round": 2, "arm": "govec", "text": "settle", "t": 1793752802.554626}
+{"kind": "step", "round": 2, "arm": "govec", "text": "throughput and latency with concurrent clients", "t": 1793752802.5563154}
+{"kind": "step", "round": 2, "arm": "govec", "text": "throughput and latency with concurrent clients over gRPC", "t": 1793753021.8116405}
+{"kind": "result", "round": 2, "arm": "govec", "status": "done", "file": "r2-govec.json", "t": 1793753242.9381127}
+{"kind": "round", "round": 3, "t": 1793753242.938261}
+{"kind": "arm", "round": 3, "arm": "govec", "position": 0, "t": 1793753242.938399}
+{"kind": "stage", "round": 3, "arm": "govec", "text": "loaded index", "t": 1793753243.292616}
+{"kind": "step", "round": 3, "arm": "govec", "text": "batch insert", "t": 1793753243.9132624}
+{"kind": "step", "round": 3, "arm": "govec", "text": "settle", "t": 1793753362.3684638}
+{"kind": "step", "round": 3, "arm": "govec", "text": "throughput and latency with concurrent clients", "t": 1793753362.3703232}
+{"kind": "step", "round": 3, "arm": "govec", "text": "throughput and latency with concurrent clients over gRPC", "t": 1793753582.4244153}
+{"kind": "result", "round": 3, "arm": "govec", "status": "done", "file": "r3-govec.json", "t": 1793753804.4258568}
+{"kind": "arm", "round": 3, "arm": "chroma", "position": 1, "t": 1793753804.4259992}
+{"kind": "stage", "round": 3, "arm": "chroma", "text": "loaded index", "t": 1793753804.7806947}
+{"kind": "step", "round": 3, "arm": "chroma", "text": "batch insert", "t": 1793753805.5035527}
+{"kind": "step", "round": 3, "arm": "chroma", "text": "settle", "t": 1793753891.2326546}
+{"kind": "step", "round": 3, "arm": "chroma", "text": "throughput and latency with concurrent clients", "t": 1793753891.245757}
+{"kind": "step", "round": 3, "arm": "chroma", "text": "throughput and latency with concurrent clients over gRPC", "t": 1793754111.627095}
+{"kind": "result", "round": 3, "arm": "chroma", "status": "done", "file": "r3-chroma.json", "t": 1793754112.0079226}
+{"kind": "arm", "round": 3, "arm": "qdrant", "position": 2, "t": 1793754112.0080583}
+{"kind": "stage", "round": 3, "arm": "qdrant", "text": "loaded index", "t": 1793754112.3782904}
+{"kind": "step", "round": 3, "arm": "qdrant", "text": "batch insert", "t": 1793754113.0616074}
+{"kind": "step", "round": 3, "arm": "qdrant", "text": "settle", "t": 1793754246.7096627}
+{"kind": "step", "round": 3, "arm": "qdrant", "text": "throughput and latency with concurrent clients", "t": 1793754246.7117357}
+{"kind": "step", "round": 3, "arm": "qdrant", "text": "throughput and latency with concurrent clients over gRPC", "t": 1793754472.7779882}
+{"kind": "result", "round": 3, "arm": "qdrant", "status": "done", "file": "r3-qdrant.json", "t": 1793754692.7601597}
+{"kind": "end", "status": "done", "t": 1793754692.761557}

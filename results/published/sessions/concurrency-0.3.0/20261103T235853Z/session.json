@@ -1,0 +1,157 @@
+{
+  "experiment": "concurrency-0.3.0",
+  "description": "GoVec 0.3.0, Chroma and Qdrant under concurrent queries on DBpedia 100k: throughput and latency at 1 to 32 client processes, over REST (and gRPC for GoVec and Qdrant), each database capped at 2 CPUs and 2 GB as in every run. The database's and the clients' CPU are recorded per level, to tell a database at its cap from clients out of CPU.",
+  "session": "20261103T235853Z",
+  "dataset": "dbpedia",
+  "size": "large",
+  "arms": {
+    "govec": {
+      "database": "govec",
+      "govec": "ghcr.io/pradyothsp/govec:0.3.0",
+      "env": {},
+      "memory_bytes": null
+    },
+    "chroma": {
+      "database": "chroma",
+      "govec": null,
+      "env": {},
+      "memory_bytes": null
+    },
+    "qdrant": {
+      "database": "qdrant",
+      "govec": null,
+      "env": {},
+      "memory_bytes": null
+    }
+  },
+  "steps": [
+    "batch-insert",
+    "settle",
+    "concurrent-queries",
+    "concurrent-queries-grpc"
+  ],
+  "plan": [
+    [
+      "govec",
+      "chroma",
+      "qdrant"
+    ],
+    [
+      "qdrant",
+      "chroma",
+      "govec"
+    ],
+    [
+      "govec",
+      "chroma",
+      "qdrant"
+    ]
+  ],
+  "machine": {
+    "platform": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.43",
+    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "cpus": 4,
+    "memory_bytes": 16759443456,
+    "docker": "29.4.2"
+  },
+  "govec_bench": {
+    "commit": "6f8f9107941c",
+    "uncommitted": []
+  },
+  "started": "2026-11-03T23:58:53.246131+00:00",
+  "finished": "2026-11-04T01:11:32.761265+00:00",
+  "status": "done",
+  "runs": [
+    {
+      "round": 1,
+      "arm": "govec",
+      "position": 0,
+      "started": "2026-11-03T23:58:58.777995+00:00",
+      "status": "done",
+      "finished": "2026-11-04T00:08:20.108471+00:00",
+      "file": "r1-govec.json",
+      "error": null
+    },
+    {
+      "round": 1,
+      "arm": "chroma",
+      "position": 1,
+      "started": "2026-11-04T00:08:20.109037+00:00",
+      "status": "done",
+      "finished": "2026-11-04T00:13:31.062685+00:00",
+      "file": "r1-chroma.json",
+      "error": null
+    },
+    {
+      "round": 1,
+      "arm": "qdrant",
+      "position": 2,
+      "started": "2026-11-04T00:13:31.063202+00:00",
+      "status": "done",
+      "finished": "2026-11-04T00:23:12.804461+00:00",
+      "file": "r1-qdrant.json",
+      "error": null
+    },
+    {
+      "round": 2,
+      "arm": "qdrant",
+      "position": 0,
+      "started": "2026-11-04T00:23:12.805205+00:00",
+      "status": "done",
+      "finished": "2026-11-04T00:32:55.763920+00:00",
+      "file": "r2-qdrant.json",
+      "error": null
+    },
+    {
+      "round": 2,
+      "arm": "chroma",
+      "position": 1,
+      "started": "2026-11-04T00:32:55.764468+00:00",
+      "status": "done",
+      "finished": "2026-11-04T00:38:02.991133+00:00",
+      "file": "r2-chroma.json",
+      "error": null
+    },
+    {
+      "round": 2,
+      "arm": "govec",
+      "position": 2,
+      "started": "2026-11-04T00:38:02.991826+00:00",
+      "status": "done",
+      "finished": "2026-11-04T00:47:22.937685+00:00",
+      "file": "r2-govec.json",
+      "error": null
+    },
+    {
+      "round": 3,
+      "arm": "govec",
+      "position": 0,
+      "started": "2026-11-04T00:47:22.938384+00:00",
+      "status": "done",
+      "finished": "2026-11-04T00:56:44.425397+00:00",
+      "file": "r3-govec.json",
+      "error": null
+    },
+    {
+      "round": 3,
+      "arm": "chroma",
+      "position": 1,
+      "started": "2026-11-04T00:56:44.425978+00:00",
+      "status": "done",
+      "finished": "2026-11-04T01:01:52.007537+00:00",
+      "file": "r3-chroma.json",
+      "error": null
+    },
+    {
+      "round": 3,
+      "arm": "qdrant",
+      "position": 2,
+      "started": "2026-11-04T01:01:52.008041+00:00",
+      "status": "done",
+      "finished": "2026-11-04T01:11:32.759568+00:00",
+      "file": "r3-qdrant.json",
+      "error": null
+    }
+  ],
+  "pid": 3010
+}

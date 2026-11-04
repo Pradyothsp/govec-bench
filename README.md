@@ -12,7 +12,8 @@ reproduce the numbers.
 > [`.github/workflows/bench.yml`](.github/workflows/bench.yml). The DBpedia 100k figures are
 > medians of three rounds of one session, `experiments/release-0.3.0.yaml`, every database run
 > once per round in an order that reverses each round; GoVec 0.2.1 ran in the same session for
-> the comparison below. The SIFT table and the ef sweep weren't re-run: they are from October
+> the comparison below. Concurrent queries come from a session of their own, on another processor,
+> and say so. The SIFT table and the ef sweep weren't re-run: they are from October
 > runs on a Mac, with older GoVec, and say so where they appear. The raw runs behind every figure
 > are in [`results/published/`](results/published/) (this session in `sessions/release-0.3.0/`).
 >
@@ -101,6 +102,45 @@ query latency and disk, and a 40% faster restart. docker stats shows 174 MB beca
 the OS it reads the files at random, and docker stats leaves out file pages that aren't in
 active use: read the process and file cache rows.
 
+### Concurrent queries (DBpedia, 100k vectors)
+
+> A separate session, `experiments/concurrency-0.3.0.yaml`, on November 3–4, 2026, on a
+> different runner: an **AMD EPYC 7763 (Zen 3)**, 4 vCPUs, where every database answers one
+> query 1.5–1.6x slower than on the EPYC 9V45 above. Compare the databases with each other in
+> this table, not its milliseconds with the tables above. Medians of three rounds.
+
+1 to 32 client processes query one loaded index at once, each with its own connection, back to
+back for 20 s per level after a 3 s warm-up. Processes, not threads: a Python client spends most
+of a query encoding and decoding under the interpreter lock. Every answer is graded, so a
+database can't go faster by answering worse: each one's recall@10 stayed the same at every
+level, and no query failed. The database's CPU comes from its cgroup, the clients' from their
+own process time.
+
+| | GoVec | GoVec, gRPC | Chroma | Qdrant | Qdrant, gRPC |
+|---|---:|---:|---:|---:|---:|
+| 1 client, queries/s | 209 | 263 | **303** | 287 | 374 |
+| Most queries/s (at clients) | 482 (4) | 592 (32) | 480 (2) | **539** (32) | 723 (16) |
+| Database CPU at that point (cap 2) | 1.97 | 1.97 | 1.46 | 1.71 | 1.66 |
+| Queries/s per database CPU | 244 | 301 | 329 | 315 | 435 |
+| p99 at 32 clients | 129 ms | 97 ms | **90 ms** | 101 ms | 71 ms |
+| Recall@10 | 98.6% | 98.6% | 98.7% | 98.9% | 98.9% |
+
+The REST columns compare the databases; the gRPC ones, like the gRPC rows above, compare client
+libraries as much as databases. Chroma's client has no gRPC mode.
+
+- **GoVec runs out of CPU first.** It reaches its 2-CPU cap at 4 clients; past that more clients
+  only queue, and p99 grows with them. Its peak is 0.89x Qdrant's over REST and 0.82x over gRPC,
+  and it does about 23% fewer queries per CPU second than Qdrant over REST (31% over gRPC): about
+  the gap in its single-query latency, now as a ceiling.
+- **Chroma peaks at 2 clients and then loses throughput:** 480 queries/s at 2, about 410 from 4
+  clients on, using only 1.3 of its 2 CPUs, so something in it serializes queries. On a Mac it
+  stopped at about 1.3 CPUs too, though without losing throughput. Why isn't known.
+- **Qdrant's ceiling here is a lower bound.** It levels off at about 1.7 CPUs, under its cap,
+  while its client is the heaviest: 1.6–1.9 cores of client CPU at the peak, against 0.4–0.6 for
+  GoVec's and Chroma's. Database and clients together use about 3.3–3.6 of the runner's 4 vCPUs,
+  so the runner may be what stops it. In one of three rounds its throughput at 8 clients halved
+  (252 queries/s, p99 162 ms); the median stands, and the cause isn't known.
+
 ### Recall against latency: the ef sweep (DBpedia, 10k vectors)
 
 > From October 6, on a Mac with Docker Desktop, with GoVec 0.2.0: not re-run on 0.3.0, and not
@@ -168,6 +208,7 @@ databases is within 3 points at ef 25 and within 0.1 point from ef 100 up.
 | Recall | 10k or 100k vectors | Share of each query's true top-k neighbours returned, against exact cosine neighbours computed by brute force |
 | Memory and disk | 100k vectors | Memory in use (`docker stats`, plus the process/file-cache split) and allocated disk after loading, relative to an empty baseline |
 | Restart | — or loaded | Time from `docker compose start` until the database answers a query, over 5 restarts, empty or with the data loaded; includes Docker's own start-up, the same for every database |
+| Concurrent queries | 10k or 100k vectors | Queries/s, latency, recall@10 and the database's and clients' CPU with 1, 2, 4, 8, 16 and 32 client processes querying at once, 20 s per level (`--steps concurrent-queries,concurrent-queries-grpc`) |
 | ef sweep | 10k vectors | Recall@10 and @50 and query latency at search ef 25, 50, 100, 200, 400 (`task bench:sweep`) |
 
 `task bench:pipeline` runs all of these from one load per database at either size (`SIZE=large`

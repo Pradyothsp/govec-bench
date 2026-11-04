@@ -1,0 +1,132 @@
+{
+  "benchmark": "pipeline",
+  "timestamp": "2026-11-04T01:01:52.004669+00:00",
+  "dataset": "dbpedia100k",
+  "setup": {
+    "chroma": {
+      "service": "chroma",
+      "image": "chromadb/chroma@sha256:1e0b73a187a28757c572acba508c46f48c9e8b0acaf5c20e6d95cdedce1acdf6",
+      "image_id": "sha256:1e0b73a187a28757c572acba508c46f48c9e8b0acaf5c20e6d95cdedce1acdf6",
+      "govec_commit": null,
+      "env": {},
+      "memory_limit_bytes": 2147483648
+    }
+  },
+  "results": {
+    "chroma": {
+      "run_position": 1,
+      "batch_insert": {
+        "total_s": 85.72688448600002,
+        "per_vector_ms": 0.8572688448600002,
+        "calls": {
+          "mean_ms": 0.8206437505100621,
+          "p50_ms": 0.7394523749985638,
+          "p99_ms": 2.2687079111025015
+        }
+      },
+      "concurrent_queries": {
+        "c_1": {
+          "concurrency": 1,
+          "queries": 6039,
+          "throughput_qps": 301.95,
+          "latency": {
+            "mean_ms": 3.302383424240775,
+            "p50_ms": 3.2985990001179744,
+            "p99_ms": 4.04074939997372
+          },
+          "p999_ms": 4.7912175997953454,
+          "recall_mean": 0.9870177181652592,
+          "server_cpu_cores": 0.8981507499999999,
+          "client_cpu_cores": 0.2537057131,
+          "errors": 0
+        },
+        "c_2": {
+          "concurrency": 2,
+          "queries": 9572,
+          "throughput_qps": 478.6,
+          "latency": {
+            "mean_ms": 4.167199186899888,
+            "p50_ms": 3.9164150000488007,
+            "p99_ms": 6.309177580019423
+          },
+          "p999_ms": 7.273802475140201,
+          "recall_mean": 0.9869724195570414,
+          "server_cpu_cores": 1.45289255,
+          "client_cpu_cores": 0.5034560671,
+          "errors": 0
+        },
+        "c_4": {
+          "concurrency": 4,
+          "queries": 8182,
+          "throughput_qps": 409.1,
+          "latency": {
+            "mean_ms": 9.757502821685081,
+            "p50_ms": 9.660770499976934,
+            "p99_ms": 12.867361589983375
+          },
+          "p999_ms": 14.972619767922424,
+          "recall_mean": 0.9869958445367881,
+          "server_cpu_cores": 1.30771265,
+          "client_cpu_cores": 0.5206285875999999,
+          "errors": 0
+        },
+        "c_8": {
+          "concurrency": 8,
+          "queries": 8268,
+          "throughput_qps": 413.4,
+          "latency": {
+            "mean_ms": 19.31503835643161,
+            "p50_ms": 19.14536900017083,
+            "p99_ms": 23.157845709988578
+          },
+          "p999_ms": 46.401824039857736,
+          "recall_mean": 0.9870222544750846,
+          "server_cpu_cores": 1.3195516,
+          "client_cpu_cores": 0.57355057815,
+          "errors": 0
+        },
+        "c_16": {
+          "concurrency": 16,
+          "queries": 8120,
+          "throughput_qps": 406.0,
+          "latency": {
+            "mean_ms": 39.30215191847516,
+            "p50_ms": 39.14485799987233,
+            "p99_ms": 44.864319190169226
+          },
+          "p999_ms": 52.14417057908031,
+          "recall_mean": 0.9869704433497537,
+          "server_cpu_cores": 1.319054,
+          "client_cpu_cores": 0.5567583334499999,
+          "errors": 0
+        },
+        "c_32": {
+          "concurrency": 32,
+          "queries": 8004,
+          "throughput_qps": 400.2,
+          "latency": {
+            "mean_ms": 79.55051291579169,
+            "p50_ms": 79.2671930000779,
+            "p99_ms": 89.82532529962555
+          },
+          "p999_ms": 96.7767764403493,
+          "recall_mean": 0.9869940029985007,
+          "server_cpu_cores": 1.30992465,
+          "client_cpu_cores": 0.5504185935,
+          "errors": 0
+        }
+      }
+    }
+  },
+  "experiment": {
+    "name": "concurrency-0.3.0",
+    "session": "20261103T235853Z",
+    "round": 3,
+    "arm": "chroma",
+    "position": 1
+  },
+  "steps": [
+    "concurrent-queries",
+    "concurrent-queries-grpc"
+  ]
+}
